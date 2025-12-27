@@ -32,7 +32,7 @@ export default function SearchCommunityPage() {
         {/* Search Inputs */}
         <div className="space-y-3 md:space-y-4">
           {/* Desktop: Side by side inputs */}
-          <div className="flex flex-col md:flex-row gap-3 md:gap-4">
+          <div className="flex flex-col gap-3 md:gap-4">
             <div className="flex items-center gap-3 bg-[#2a2a2a] rounded-full px-4 md:px-6 py-3 md:py-4 flex-1 hover:bg-[#333] transition-colors">
               <Search className="h-5 w-5 md:h-6 md:w-6 text-gray-400" />
               <input
@@ -44,7 +44,7 @@ export default function SearchCommunityPage() {
               />
             </div>
 
-            <div className="flex items-center gap-3 bg-[#2a2a2a] rounded-full px-4 md:px-6 py-3 md:py-4 md:w-64 hover:bg-[#333] transition-colors">
+            <div className="flex items-center gap-3 bg-[#2a2a2a] rounded-full px-4 md:px-6 py-3 md:py-4 hover:bg-[#333] transition-colors">
               <MapPin className="h-5 w-5 md:h-6 md:w-6 text-gray-400" />
               <input
                 type="text"

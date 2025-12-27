@@ -2,7 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Nunito_Sans } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
-import "./globals.css"
+import "./global.css"
 
 const nunitoSans = Nunito_Sans({
   subsets: ["latin"],
