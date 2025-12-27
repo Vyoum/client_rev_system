@@ -2,7 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react"
 import { useEffect, useMemo, useState } from "react"
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore"
+import { collection, onSnapshot, orderBy, query, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -15,9 +15,12 @@ type ListingItem = {
   id: string
   name: string
   location: string
+  state?: string
+  city?: string
   status: ListingStatus
   description: string
   updatedAt: string
+  createdAt?: Timestamp | string
 }
 
 type ReviewItem = {
@@ -51,57 +54,10 @@ const tabs = [
 type TabId = (typeof tabs)[number]["id"]
 type ListingTabId = "schools" | "colleges" | "jobs" | "companies"
 
-const initialSchools: ListingItem[] = [
-  {
-    id: "school-1",
-    name: "Greenfield Public School",
-    location: "Bengaluru, Karnataka",
-    status: "Published",
-    description: "CBSE campus with STEM labs and sports facilities.",
-    updatedAt: "2024-02-14 10:18",
-  },
-  {
-    id: "school-2",
-    name: "Lotus Valley Academy",
-    location: "Gurugram, Haryana",
-    status: "Draft",
-    description: "Modern classrooms with a focus on arts and music.",
-    updatedAt: "2024-02-11 16:02",
-  },
-]
-
-const initialColleges: ListingItem[] = [
-  {
-    id: "college-1",
-    name: "Northstar Engineering College",
-    location: "Hyderabad, Telangana",
-    status: "Published",
-    description: "B.Tech programs with strong industry partnerships.",
-    updatedAt: "2024-02-10 09:40",
-  },
-]
-
-const initialJobs: ListingItem[] = [
-  {
-    id: "job-1",
-    name: "Frontend Engineer",
-    location: "Remote, India",
-    status: "Published",
-    description: "React, Next.js, and design system experience.",
-    updatedAt: "2024-02-15 14:22",
-  },
-]
-
-const initialCompanies: ListingItem[] = [
-  {
-    id: "company-1",
-    name: "Vyoum Technologies",
-    location: "Pune, Maharashtra",
-    status: "Published",
-    description: "Product studio working on talent and community platforms.",
-    updatedAt: "2024-02-13 11:30",
-  },
-]
+// Helper function to get collection name from tab ID
+const getCollectionName = (tabId: ListingTabId): string => {
+  return tabId // "schools", "colleges", "jobs", "companies"
+}
 
 const initialReviews: ReviewItem[] = [
   {
@@ -143,12 +99,17 @@ export default function AdminPage() {
   const [usersError, setUsersError] = useState<string | null>(null)
   const [userQuery, setUserQuery] = useState("")
 
-  const [schools, setSchools] = useState<ListingItem[]>(initialSchools)
-  const [colleges, setColleges] = useState<ListingItem[]>(initialColleges)
-  const [jobs, setJobs] = useState<ListingItem[]>(initialJobs)
-  const [companies, setCompanies] = useState<ListingItem[]>(initialCompanies)
+  const [schools, setSchools] = useState<ListingItem[]>([])
+  const [colleges, setColleges] = useState<ListingItem[]>([])
+  const [jobs, setJobs] = useState<ListingItem[]>([])
+  const [companies, setCompanies] = useState<ListingItem[]>([])
+  const [schoolsLoading, setSchoolsLoading] = useState(true)
+  const [collegesLoading, setCollegesLoading] = useState(true)
+  const [jobsLoading, setJobsLoading] = useState(true)
+  const [companiesLoading, setCompaniesLoading] = useState(true)
   const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews)
 
+  // Load users
   useEffect(() => {
     const usersRef = collection(db, "users")
     const usersQuery = query(usersRef, orderBy("createdAt", "desc"))
@@ -181,6 +142,142 @@ export default function AdminPage() {
     return () => unsubscribe()
   }, [])
 
+  // Load schools
+  useEffect(() => {
+    const schoolsRef = collection(db, "schools")
+    const schoolsQuery = query(schoolsRef, orderBy("updatedAt", "desc"))
+    const unsubscribe = onSnapshot(
+      schoolsQuery,
+      (snapshot) => {
+        const nextSchools = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            name: data.name || "",
+            location: data.location || "",
+            state: data.state || "",
+            city: data.city || "",
+            status: (data.status || "Draft") as ListingStatus,
+            description: data.description || "",
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
+            createdAt: data.createdAt,
+          }
+        })
+        setSchools(nextSchools)
+        setSchoolsLoading(false)
+      },
+      (error) => {
+        console.error("Loading schools failed:", error)
+        setSchools([])
+        setSchoolsLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
+
+  // Load colleges
+  useEffect(() => {
+    const collegesRef = collection(db, "colleges")
+    const collegesQuery = query(collegesRef, orderBy("updatedAt", "desc"))
+    const unsubscribe = onSnapshot(
+      collegesQuery,
+      (snapshot) => {
+        const nextColleges = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            name: data.name || "",
+            location: data.location || "",
+            state: data.state || "",
+            city: data.city || "",
+            status: (data.status || "Draft") as ListingStatus,
+            description: data.description || "",
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
+            createdAt: data.createdAt,
+          }
+        })
+        setColleges(nextColleges)
+        setCollegesLoading(false)
+      },
+      (error) => {
+        console.error("Loading colleges failed:", error)
+        setColleges([])
+        setCollegesLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
+
+  // Load jobs
+  useEffect(() => {
+    const jobsRef = collection(db, "jobs")
+    const jobsQuery = query(jobsRef, orderBy("updatedAt", "desc"))
+    const unsubscribe = onSnapshot(
+      jobsQuery,
+      (snapshot) => {
+        const nextJobs = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            name: data.name || "",
+            location: data.location || "",
+            state: data.state || "",
+            city: data.city || "",
+            status: (data.status || "Draft") as ListingStatus,
+            description: data.description || "",
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
+            createdAt: data.createdAt,
+          }
+        })
+        setJobs(nextJobs)
+        setJobsLoading(false)
+      },
+      (error) => {
+        console.error("Loading jobs failed:", error)
+        setJobs([])
+        setJobsLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
+
+  // Load companies
+  useEffect(() => {
+    const companiesRef = collection(db, "companies")
+    const companiesQuery = query(companiesRef, orderBy("updatedAt", "desc"))
+    const unsubscribe = onSnapshot(
+      companiesQuery,
+      (snapshot) => {
+        const nextCompanies = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            name: data.name || "",
+            location: data.location || "",
+            state: data.state || "",
+            city: data.city || "",
+            status: (data.status || "Draft") as ListingStatus,
+            description: data.description || "",
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
+            createdAt: data.createdAt,
+          }
+        })
+        setCompanies(nextCompanies)
+        setCompaniesLoading(false)
+      },
+      (error) => {
+        console.error("Loading companies failed:", error)
+        setCompanies([])
+        setCompaniesLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
+
   const filteredUsers = useMemo(() => {
     const query = userQuery.trim().toLowerCase()
     if (!query) return users
@@ -201,11 +298,11 @@ export default function AdminPage() {
     companies.filter((item) => item.status === "Published").length
   const hiddenReviews = reviews.filter((review) => review.status === "Hidden").length
 
-  const listingConfigMap: Record<ListingTabId, { label: string; items: ListingItem[]; setItems: Dispatch<SetStateAction<ListingItem[]>> }> = {
-    schools: { label: "School", items: schools, setItems: setSchools },
-    colleges: { label: "College", items: colleges, setItems: setColleges },
-    jobs: { label: "Job", items: jobs, setItems: setJobs },
-    companies: { label: "Company", items: companies, setItems: setCompanies },
+  const listingConfigMap: Record<ListingTabId, { label: string; items: ListingItem[]; setItems: Dispatch<SetStateAction<ListingItem[]>>; collectionName: string; loading: boolean }> = {
+    schools: { label: "School", items: schools, setItems: setSchools, collectionName: "schools", loading: schoolsLoading },
+    colleges: { label: "College", items: colleges, setItems: setColleges, collectionName: "colleges", loading: collegesLoading },
+    jobs: { label: "Job", items: jobs, setItems: setJobs, collectionName: "jobs", loading: jobsLoading },
+    companies: { label: "Company", items: companies, setItems: setCompanies, collectionName: "companies", loading: companiesLoading },
   }
 
   const activeListingConfig =
@@ -312,6 +409,8 @@ export default function AdminPage() {
               label={activeListingConfig.label}
               items={activeListingConfig.items}
               setItems={activeListingConfig.setItems}
+              collectionName={activeListingConfig.collectionName}
+              loading={activeListingConfig.loading}
             />
           )}
 
@@ -336,20 +435,27 @@ function ListingsPanel({
   label,
   items,
   setItems,
+  collectionName,
+  loading,
 }: {
   label: string
   items: ListingItem[]
   setItems: Dispatch<SetStateAction<ListingItem[]>>
+  collectionName: string
+  loading: boolean
 }) {
   const [draft, setDraft] = useState({
     name: "",
     location: "",
+    state: "",
+    city: "",
     status: "Draft" as ListingStatus,
     description: "",
   })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState("")
   const [formError, setFormError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const filteredItems = useMemo(() => {
     const query = filterQuery.trim().toLowerCase()
@@ -360,46 +466,69 @@ function ListingsPanel({
   }, [filterQuery, items])
 
   const resetDraft = () => {
-    setDraft({ name: "", location: "", status: "Draft", description: "" })
+    setDraft({ name: "", location: "", state: "", city: "", status: "Draft", description: "" })
     setEditingId(null)
     setFormError(null)
   }
 
-  const handleSave = () => {
+  const parseLocation = (location: string) => {
+    // Try to parse "City, State" format
+    const parts = location.split(",").map((p) => p.trim())
+    if (parts.length >= 2) {
+      return { city: parts[0], state: parts.slice(1).join(", ") }
+    }
+    return { city: "", state: location }
+  }
+
+  const handleSave = async () => {
     const trimmedName = draft.name.trim()
     if (!trimmedName) {
       setFormError("Name is required.")
       return
     }
-    const updatedAt = new Date().toLocaleString()
 
-    if (editingId) {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === editingId
-            ? { ...item, ...draft, name: trimmedName, updatedAt }
-            : item
-        )
-      )
-    } else {
-      const newItem: ListingItem = {
-        id: createId(label.toLowerCase()),
+    setSaving(true)
+    setFormError(null)
+
+    try {
+      const locationData = parseLocation(draft.location.trim())
+      const listingData = {
         name: trimmedName,
         location: draft.location.trim(),
+        state: draft.state || locationData.state,
+        city: draft.city || locationData.city,
         status: draft.status,
         description: draft.description.trim(),
-        updatedAt,
+        updatedAt: serverTimestamp(),
       }
-      setItems((prev) => [newItem, ...prev])
-    }
 
-    resetDraft()
+      if (editingId) {
+        // Update existing listing
+        const listingRef = doc(db, collectionName, editingId)
+        await updateDoc(listingRef, listingData)
+      } else {
+        // Create new listing
+        await addDoc(collection(db, collectionName), {
+          ...listingData,
+          createdAt: serverTimestamp(),
+        })
+      }
+
+      resetDraft()
+    } catch (error) {
+      console.error("Error saving listing:", error)
+      setFormError("Failed to save listing. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleEdit = (item: ListingItem) => {
     setDraft({
       name: item.name,
       location: item.location,
+      state: item.state || "",
+      city: item.city || "",
       status: item.status,
       description: item.description,
     })
@@ -407,10 +536,19 @@ function ListingsPanel({
     setFormError(null)
   }
 
-  const handleDelete = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id))
-    if (editingId === id) {
-      resetDraft()
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this listing?")) {
+      return
+    }
+
+    try {
+      await deleteDoc(doc(db, collectionName, id))
+      if (editingId === id) {
+        resetDraft()
+      }
+    } catch (error) {
+      console.error("Error deleting listing:", error)
+      setFormError("Failed to delete listing. Please try again.")
     }
   }
 
@@ -431,7 +569,9 @@ function ListingsPanel({
         </div>
 
         <div className="mt-4 space-y-3">
-          {filteredItems.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-white/60">Loading listings...</p>
+          ) : filteredItems.length === 0 ? (
             <p className="text-sm text-white/60">No listings match this search.</p>
           ) : (
             filteredItems.map((item) => (
@@ -504,11 +644,15 @@ function ListingsPanel({
           {formError && <p className="text-xs text-red-300">{formError}</p>}
 
           <div className="flex gap-2">
-            <Button className="flex-1 bg-[#0CAA41] text-white hover:bg-[#0B5B32]" onClick={handleSave}>
-              {editingId ? "Update listing" : "Add listing"}
+            <Button 
+              className="flex-1 bg-[#0CAA41] text-white hover:bg-[#0B5B32]" 
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "Saving..." : editingId ? "Update listing" : "Add listing"}
             </Button>
             {editingId && (
-              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft}>
+              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft} disabled={saving}>
                 Cancel
               </Button>
             )}

@@ -7,7 +7,13 @@ import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth"
+import {
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth"
 import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore"
 import { auth, googleProvider, db } from "@/lib/firebase"
 
@@ -19,29 +25,35 @@ interface SignInModalProps {
 interface SubmittedData {
   name: string
   phone: string
+  email?: string
 }
 
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [submittedData, setSubmittedData] = useState<SubmittedData | null>(null)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isCreateSaving, setIsCreateSaving] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isCreateMode, setIsCreateMode] = useState(false)
 
   const saveUserRecord = async (data: {
     name: string
     phone: string
     email?: string | null
     uid?: string
-    provider: "google" | "manual"
+    provider: "google" | "manual" | "email"
   }) => {
     const record: {
       name: string
       phone: string
       email?: string
-      provider: "google" | "manual"
+      provider: "google" | "manual" | "email"
       uid?: string
       createdAt: ReturnType<typeof serverTimestamp>
       updatedAt: ReturnType<typeof serverTimestamp>
@@ -86,7 +98,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         }
         await saveUserRecord(userData)
         if (!isMounted) return
-        setSubmittedData({ name: userData.name, phone: userData.phone })
+        setSubmittedData({ name: userData.name, phone: userData.phone, email: userData.email || undefined })
         setSubmitted(true)
       } catch (error) {
         if (!isMounted) return
@@ -117,7 +129,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         provider: "google" as const,
       }
       await saveUserRecord(userData)
-      setSubmittedData({ name: userData.name, phone: userData.phone })
+      setSubmittedData({ name: userData.name, phone: userData.phone, email: userData.email || undefined })
       setSubmitted(true)
     } catch (error: any) {
       if (error?.code === "auth/popup-blocked" || error?.code === "auth/popup-closed-by-user") {
@@ -162,14 +174,66 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   }
 
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitError(null)
+
+    const trimmedName = name.trim()
+    const trimmedEmail = email.trim()
+
+    if (!trimmedName) {
+      setSubmitError("Please enter your full name.")
+      return
+    }
+    if (!trimmedEmail) {
+      setSubmitError("Please enter a valid email address.")
+      return
+    }
+    if (password.length < 6) {
+      setSubmitError("Password must be at least 6 characters.")
+      return
+    }
+    if (password !== confirmPassword) {
+      setSubmitError("Passwords do not match.")
+      return
+    }
+
+    setIsCreateSaving(true)
+
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, trimmedEmail, password)
+      await updateProfile(credential.user, { displayName: trimmedName })
+      await saveUserRecord({
+        name: trimmedName,
+        phone: "",
+        email: trimmedEmail,
+        uid: credential.user.uid,
+        provider: "email",
+      })
+      setSubmittedData({ name: trimmedName, phone: "", email: trimmedEmail })
+      setSubmitted(true)
+      setIsCreateMode(false)
+    } catch (error) {
+      console.error("Create account failed:", error)
+      setSubmitError("Could not create account. Please try again.")
+    } finally {
+      setIsCreateSaving(false)
+    }
+  }
+
   const handleClose = () => {
     setName("")
     setPhone("")
+    setEmail("")
+    setPassword("")
+    setConfirmPassword("")
     setSubmitted(false)
     setSubmittedData(null)
     setIsGoogleLoading(false)
     setIsSaving(false)
+    setIsCreateSaving(false)
     setSubmitError(null)
+    setIsCreateMode(false)
     onClose()
   }
 
@@ -208,7 +272,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           </div>
           <h2 className="text-2xl font-bold text-[#E6E8EA] mb-2">Welcome to WorkHub</h2>
           <p className="text-sm text-[#9AA0A6]">
-            {submitted ? "You're all set! 🎉" : "Sign in to continue or create an account"}
+            {submitted ? "You're all set! 🎉" : isCreateMode ? "Create your account" : "Sign in to continue or create an account"}
           </p>
         </div>
 
@@ -236,6 +300,12 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                     <span className="text-xs font-medium uppercase tracking-wide text-[#9AA0A6]">Phone</span>
                     <p className="mt-1 text-base font-semibold text-[#E6E8EA]">{submittedData.phone || "Not provided"}</p>
                   </div>
+                  {submittedData.email && (
+                    <div>
+                      <span className="text-xs font-medium uppercase tracking-wide text-[#9AA0A6]">Email</span>
+                      <p className="mt-1 text-base font-semibold text-[#E6E8EA]">{submittedData.email}</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -246,6 +316,108 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                 Done
               </Button>
             </div>
+          ) : isCreateMode ? (
+            <form onSubmit={handleCreateAccount} className="space-y-5">
+              <div className="space-y-3">
+                <Label htmlFor="create-name" className="text-sm font-semibold text-[#E6E8EA]">
+                  Full Name
+                </Label>
+                <Input
+                  id="create-name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="create-email" className="text-sm font-semibold text-[#E6E8EA]">
+                  Email Address
+                </Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="create-password" className="text-sm font-semibold text-[#E6E8EA]">
+                  Password
+                </Label>
+                <Input
+                  id="create-password"
+                  type="password"
+                  placeholder="Create a password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="create-confirm" className="text-sm font-semibold text-[#E6E8EA]">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="create-confirm"
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                />
+              </div>
+
+              {submitError && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                  <p className="text-xs font-medium text-red-400 text-center">{submitError}</p>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={isCreateSaving}
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-[#0CAA41] to-[#0B8A35] text-white font-semibold shadow-lg shadow-[#0CAA41]/20 transition-all hover:shadow-[#0CAA41]/30 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+              >
+                {isCreateSaving ? "Creating..." : "Create account"}
+              </Button>
+
+              <p className="text-xs text-center leading-relaxed text-[#9AA0A6]">
+                By continuing, you agree to WorkHub's{" "}
+                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
+                  Terms of Use
+                </a>{" "}
+                and{" "}
+                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
+                  Privacy Policy
+                </a>
+                .
+              </p>
+
+              <p className="text-xs text-center text-[#9AA0A6]">
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateMode(false)
+                    setSubmitError(null)
+                  }}
+                  className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline"
+                >
+                  Sign in
+                </button>
+              </p>
+            </form>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <Button
@@ -335,6 +507,20 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   Privacy Policy
                 </a>
                 .
+              </p>
+
+              <p className="text-xs text-center text-[#9AA0A6]">
+                Don&apos;t have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateMode(true)
+                    setSubmitError(null)
+                  }}
+                  className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline"
+                >
+                  Create one
+                </button>
               </p>
             </form>
           )}
