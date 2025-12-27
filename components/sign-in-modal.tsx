@@ -2,11 +2,14 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth"
+import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore"
+import { auth, googleProvider, db } from "@/lib/firebase"
 
 interface SignInModalProps {
   isOpen: boolean
@@ -23,19 +26,122 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [phone, setPhone] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [submittedData, setSubmittedData] = useState<SubmittedData | null>(null)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const handleGoogleSignIn = () => {
-    console.log("=== Google Sign In ===")
-    console.log("Timestamp:", new Date().toISOString())
-    console.log("======================")
-    setSubmittedData({ name: "Google User", phone: "" })
-    setSubmitted(true)
+  const saveUserRecord = async (data: {
+    name: string
+    phone: string
+    email?: string | null
+    uid?: string
+    provider: "google" | "manual"
+  }) => {
+    const record: {
+      name: string
+      phone: string
+      email?: string
+      provider: "google" | "manual"
+      uid?: string
+      createdAt: ReturnType<typeof serverTimestamp>
+      updatedAt: ReturnType<typeof serverTimestamp>
+    } = {
+      name: data.name,
+      phone: data.phone,
+      provider: data.provider,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+
+    if (data.email) {
+      record.email = data.email
+    }
+
+    if (data.uid) {
+      record.uid = data.uid
+    }
+
+    if (data.uid) {
+      await setDoc(doc(db, "users", data.uid), record, { merge: true })
+    } else {
+      await addDoc(collection(db, "users"), record)
+    }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (!isOpen) return
 
-    const userData = { name, phone }
+    let isMounted = true
+    const handleRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+        if (!isMounted || !result?.user) return
+        const user = result.user
+        const userData = {
+          name: user.displayName || "Google User",
+          phone: user.phoneNumber || "",
+          email: user.email,
+          uid: user.uid,
+          provider: "google" as const,
+        }
+        await saveUserRecord(userData)
+        if (!isMounted) return
+        setSubmittedData({ name: userData.name, phone: userData.phone })
+        setSubmitted(true)
+      } catch (error) {
+        if (!isMounted) return
+        console.error("Google redirect sign in failed:", error)
+        setSubmitError("Google sign-in failed. Please try again.")
+      }
+    }
+
+    handleRedirect()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen])
+
+  const handleGoogleSignIn = async () => {
+    setSubmitError(null)
+    setIsGoogleLoading(true)
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      const user = result.user
+      const userData = {
+        name: user.displayName || "Google User",
+        phone: user.phoneNumber || "",
+        email: user.email,
+        uid: user.uid,
+        provider: "google" as const,
+      }
+      await saveUserRecord(userData)
+      setSubmittedData({ name: userData.name, phone: userData.phone })
+      setSubmitted(true)
+    } catch (error: any) {
+      if (error?.code === "auth/popup-blocked" || error?.code === "auth/popup-closed-by-user") {
+        try {
+          await signInWithRedirect(auth, googleProvider)
+          return
+        } catch (redirectError) {
+          console.error("Google redirect sign in failed:", redirectError)
+        }
+      } else {
+        console.error("Google sign in failed:", error)
+      }
+      setSubmitError("Google sign-in failed. Please try again.")
+    } finally {
+      setIsGoogleLoading(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitError(null)
+    setIsSaving(true)
+
+    const userData = { name: name.trim(), phone: phone.trim() }
 
     // Log details to console so you can see them
     console.log("=== User Sign In / Sign Up Details ===")
@@ -44,8 +150,16 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     console.log("Timestamp:", new Date().toISOString())
     console.log("============================")
 
-    setSubmittedData(userData)
-    setSubmitted(true)
+    try {
+      await saveUserRecord({ ...userData, provider: "manual" })
+      setSubmittedData(userData)
+      setSubmitted(true)
+    } catch (error) {
+      console.error("Saving user data failed:", error)
+      setSubmitError("Could not save your details. Please try again.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleClose = () => {
@@ -53,6 +167,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     setPhone("")
     setSubmitted(false)
     setSubmittedData(null)
+    setIsGoogleLoading(false)
+    setIsSaving(false)
+    setSubmitError(null)
     onClose()
   }
 
@@ -110,7 +227,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               <Button
                 type="button"
                 onClick={handleGoogleSignIn}
-                className="w-full h-12 bg-white text-[#1a1a1a] hover:bg-gray-100 font-semibold"
+                disabled={isGoogleLoading}
+                className="w-full h-12 bg-white text-[#1a1a1a] hover:bg-gray-100 font-semibold disabled:cursor-not-allowed disabled:opacity-80"
               >
                 <svg className="h-5 w-5 mr-2" viewBox="0 0 48 48" aria-hidden="true">
                   <path
@@ -130,8 +248,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                     d="M24 48c6.3 0 11.84-2.08 15.79-5.63l-7.05-5.48c-2.04 1.37-4.67 2.18-8.74 2.18-6.1 0-11.3-3.78-13.27-9.38l-8.06 6.26C6.51 42.62 14.6 48 24 48z"
                   />
                 </svg>
-                Continue with Google
+                {isGoogleLoading ? "Opening Google..." : "Continue with Google"}
               </Button>
+
+              {submitError && <p className="text-xs text-red-400 text-center">{submitError}</p>}
 
               <div className="flex items-center gap-3 text-xs text-gray-400">
                 <div className="h-px flex-1 bg-[#333]" />
@@ -171,9 +291,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
               <Button
                 type="submit"
+                disabled={isSaving}
                 className="w-full h-12 bg-[#0CAA41] hover:bg-[#0B5B32] text-white font-semibold text-base"
               >
-                Continue
+                {isSaving ? "Saving..." : "Continue"}
               </Button>
 
               <p className="text-xs text-center text-gray-400">
