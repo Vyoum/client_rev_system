@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, MapPin, User } from "lucide-react"
+import { MapPin, User } from "lucide-react"
 import { INDIA_LOCATIONS } from "../data/india-locations"
 import SignInModal from "./sign-in-modal"
 
@@ -75,7 +75,7 @@ export default function SearchCommunityPage() {
         <div className="space-y-3">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3 h-12 md:h-14 rounded-full px-5 md:px-6 border border-white/10 bg-white/5 backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
-              <Search className="h-5 w-5 text-[#9AA0A6]" />
+              <CuteSearchIcon />
               <input
                 type="text"
                 placeholder={activeTab}
@@ -204,5 +204,17 @@ export default function SearchCommunityPage() {
       <div className="flex-1 px-5 sm:px-6 py-6 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full" />
       <SignInModal isOpen={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
     </div>
+  )
+}
+
+function CuteSearchIcon() {
+  return (
+    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10">
+      <svg className="h-4 w-4 text-[#C7CCD1]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="5.5" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M15.3 15.3L20 20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="8.5" cy="8.5" r="1" fill="currentColor" opacity="0.6" />
+      </svg>
+    </span>
   )
 }
