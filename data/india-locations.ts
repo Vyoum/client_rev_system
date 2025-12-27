@@ -1,0 +1,43 @@
+export type LocationState = {
+  state: string
+  cities: string[]
+}
+
+export const INDIA_LOCATIONS: LocationState[] = [
+  { state: "Andhra Pradesh", cities: ["Amaravati", "Visakhapatnam", "Vijayawada"] },
+  { state: "Arunachal Pradesh", cities: ["Itanagar", "Tawang", "Pasighat"] },
+  { state: "Assam", cities: ["Guwahati", "Silchar", "Dibrugarh"] },
+  { state: "Bihar", cities: ["Patna", "Gaya", "Bhagalpur"] },
+  { state: "Chhattisgarh", cities: ["Raipur", "Bilaspur", "Durg"] },
+  { state: "Goa", cities: ["Panaji", "Margao", "Vasco da Gama"] },
+  { state: "Gujarat", cities: ["Ahmedabad", "Surat", "Vadodara"] },
+  { state: "Haryana", cities: ["Gurugram", "Faridabad", "Panipat"] },
+  { state: "Himachal Pradesh", cities: ["Shimla", "Dharamshala", "Manali"] },
+  { state: "Jharkhand", cities: ["Ranchi", "Jamshedpur", "Dhanbad"] },
+  { state: "Karnataka", cities: ["Bengaluru", "Mysuru", "Mangaluru"] },
+  { state: "Kerala", cities: ["Thiruvananthapuram", "Kochi", "Kozhikode"] },
+  { state: "Madhya Pradesh", cities: ["Bhopal", "Indore", "Jabalpur"] },
+  { state: "Maharashtra", cities: ["Mumbai", "Pune", "Nagpur"] },
+  { state: "Manipur", cities: ["Imphal", "Thoubal", "Churachandpur"] },
+  { state: "Meghalaya", cities: ["Shillong", "Tura", "Jowai"] },
+  { state: "Mizoram", cities: ["Aizawl", "Lunglei", "Champhai"] },
+  { state: "Nagaland", cities: ["Kohima", "Dimapur", "Mokokchung"] },
+  { state: "Odisha", cities: ["Bhubaneswar", "Cuttack", "Rourkela"] },
+  { state: "Punjab", cities: ["Amritsar", "Ludhiana", "Jalandhar"] },
+  { state: "Rajasthan", cities: ["Jaipur", "Jodhpur", "Udaipur"] },
+  { state: "Sikkim", cities: ["Gangtok", "Namchi", "Gyalshing"] },
+  { state: "Tamil Nadu", cities: ["Chennai", "Coimbatore", "Madurai"] },
+  { state: "Telangana", cities: ["Hyderabad", "Warangal", "Nizamabad"] },
+  { state: "Tripura", cities: ["Agartala", "Udaipur", "Dharmanagar"] },
+  { state: "Uttar Pradesh", cities: ["Lucknow", "Kanpur", "Varanasi"] },
+  { state: "Uttarakhand", cities: ["Dehradun", "Haridwar", "Haldwani"] },
+  { state: "West Bengal", cities: ["Kolkata", "Siliguri", "Durgapur"] },
+  { state: "Andaman and Nicobar Islands", cities: ["Port Blair", "Havelock Island", "Car Nicobar"] },
+  { state: "Chandigarh", cities: ["Chandigarh", "Mohali", "Panchkula"] },
+  { state: "Dadra and Nagar Haveli and Daman and Diu", cities: ["Silvassa", "Daman", "Diu"] },
+  { state: "Delhi", cities: ["New Delhi", "Dwarka", "Rohini"] },
+  { state: "Jammu and Kashmir", cities: ["Srinagar", "Jammu", "Anantnag"] },
+  { state: "Ladakh", cities: ["Leh", "Kargil", "Diskit"] },
+  { state: "Lakshadweep", cities: ["Kavaratti", "Minicoy", "Agatti"] },
+  { state: "Puducherry", cities: ["Puducherry", "Karaikal", "Mahe"] },
+]

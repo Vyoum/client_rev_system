@@ -14,24 +14,32 @@ interface SignInModalProps {
 }
 
 interface SubmittedData {
-  email: string
+  name: string
   phone: string
 }
 
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
-  const [email, setEmail] = useState("")
+  const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [submittedData, setSubmittedData] = useState<SubmittedData | null>(null)
 
+  const handleGoogleSignIn = () => {
+    console.log("=== Google Sign In ===")
+    console.log("Timestamp:", new Date().toISOString())
+    console.log("======================")
+    setSubmittedData({ name: "Google User", phone: "" })
+    setSubmitted(true)
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    const userData = { email, phone }
+    const userData = { name, phone }
 
     // Log details to console so you can see them
-    console.log("=== User Sign In Details ===")
-    console.log("Email:", email)
+    console.log("=== User Sign In / Sign Up Details ===")
+    console.log("Name:", name)
     console.log("Phone:", phone)
     console.log("Timestamp:", new Date().toISOString())
     console.log("============================")
@@ -41,7 +49,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   }
 
   const handleClose = () => {
-    setEmail("")
+    setName("")
     setPhone("")
     setSubmitted(false)
     setSubmittedData(null)
@@ -66,7 +74,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             <X className="h-6 w-6" />
           </button>
           <h2 className="text-2xl font-bold text-white mb-1">WorkHub</h2>
-          <p className="text-white/80 text-sm">{submitted ? "Welcome! You're all set" : "Sign in to continue"}</p>
+          <p className="text-white/80 text-sm">{submitted ? "Welcome! You're all set" : "Sign in or sign up"}</p>
         </div>
 
         {/* Body */}
@@ -82,12 +90,12 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
               <div className="bg-[#2a2a2a] rounded-lg p-4 text-left space-y-2 mb-6">
                 <div>
-                  <span className="text-sm text-gray-400">Email:</span>
-                  <p className="font-medium text-white">{submittedData.email}</p>
+                  <span className="text-sm text-gray-400">Name:</span>
+                  <p className="font-medium text-white">{submittedData.name}</p>
                 </div>
                 <div>
                   <span className="text-sm text-gray-400">Phone:</span>
-                  <p className="font-medium text-white">{submittedData.phone}</p>
+                  <p className="font-medium text-white">{submittedData.phone || "Not provided"}</p>
                 </div>
               </div>
 
@@ -99,16 +107,48 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              <Button
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full h-12 bg-white text-[#1a1a1a] hover:bg-gray-100 font-semibold"
+              >
+                <svg className="h-5 w-5 mr-2" viewBox="0 0 48 48" aria-hidden="true">
+                  <path
+                    fill="#EA4335"
+                    d="M24 9.5c3.54 0 6.73 1.22 9.23 3.22l6.9-6.9C35.84 2.1 30.3 0 24 0 14.6 0 6.51 5.38 2.67 13.22l8.06 6.26C12.7 13.28 17.9 9.5 24 9.5z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M46.1 24.5c0-1.69-.15-3.32-.43-4.9H24v9.28h12.44c-.54 2.9-2.16 5.35-4.6 7.01l7.05 5.48c4.13-3.82 6.21-9.45 6.21-15.87z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M10.73 28.02c-.56-1.7-.88-3.52-.88-5.4s.32-3.7.88-5.4l-8.06-6.26C.95 13.88 0 18.8 0 22.62c0 3.82.95 8.74 2.67 12.66l8.06-6.26z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M24 48c6.3 0 11.84-2.08 15.79-5.63l-7.05-5.48c-2.04 1.37-4.67 2.18-8.74 2.18-6.1 0-11.3-3.78-13.27-9.38l-8.06 6.26C6.51 42.62 14.6 48 24 48z"
+                  />
+                </svg>
+                Continue with Google
+              </Button>
+
+              <div className="flex items-center gap-3 text-xs text-gray-400">
+                <div className="h-px flex-1 bg-[#333]" />
+                <span>or</span>
+                <div className="h-px flex-1 bg-[#333]" />
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-white font-medium">
-                  Email Address
+                <Label htmlFor="name" className="text-white font-medium">
+                  Full Name
                 </Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="name"
+                  type="text"
+                  placeholder="Enter your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   required
                   className="h-12 bg-[#2a2a2a] border-[#333] text-white placeholder-gray-500 focus:border-[#0CAA41] focus:ring-[#0CAA41]"
                 />
@@ -121,7 +161,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="Enter your phone number"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
