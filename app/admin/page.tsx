@@ -1,0 +1,696 @@
+"use client"
+
+import type { Dispatch, SetStateAction } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { db } from "@/lib/firebase"
+
+type ListingStatus = "Draft" | "Published"
+type ReviewStatus = "Visible" | "Hidden"
+
+type ListingItem = {
+  id: string
+  name: string
+  location: string
+  status: ListingStatus
+  description: string
+  updatedAt: string
+}
+
+type ReviewItem = {
+  id: string
+  author: string
+  rating: number
+  message: string
+  source: string
+  status: ReviewStatus
+  createdAt: string
+}
+
+type UserRecord = {
+  id: string
+  name: string
+  phone: string
+  email?: string | null
+  provider?: string
+  createdAt?: unknown
+}
+
+const tabs = [
+  { id: "users", label: "Users" },
+  { id: "schools", label: "Schools" },
+  { id: "colleges", label: "Colleges" },
+  { id: "jobs", label: "Jobs" },
+  { id: "companies", label: "Companies" },
+  { id: "reviews", label: "Reviews" },
+] as const
+
+type TabId = (typeof tabs)[number]["id"]
+type ListingTabId = "schools" | "colleges" | "jobs" | "companies"
+
+const initialSchools: ListingItem[] = [
+  {
+    id: "school-1",
+    name: "Greenfield Public School",
+    location: "Bengaluru, Karnataka",
+    status: "Published",
+    description: "CBSE campus with STEM labs and sports facilities.",
+    updatedAt: "2024-02-14 10:18",
+  },
+  {
+    id: "school-2",
+    name: "Lotus Valley Academy",
+    location: "Gurugram, Haryana",
+    status: "Draft",
+    description: "Modern classrooms with a focus on arts and music.",
+    updatedAt: "2024-02-11 16:02",
+  },
+]
+
+const initialColleges: ListingItem[] = [
+  {
+    id: "college-1",
+    name: "Northstar Engineering College",
+    location: "Hyderabad, Telangana",
+    status: "Published",
+    description: "B.Tech programs with strong industry partnerships.",
+    updatedAt: "2024-02-10 09:40",
+  },
+]
+
+const initialJobs: ListingItem[] = [
+  {
+    id: "job-1",
+    name: "Frontend Engineer",
+    location: "Remote, India",
+    status: "Published",
+    description: "React, Next.js, and design system experience.",
+    updatedAt: "2024-02-15 14:22",
+  },
+]
+
+const initialCompanies: ListingItem[] = [
+  {
+    id: "company-1",
+    name: "Vyoum Technologies",
+    location: "Pune, Maharashtra",
+    status: "Published",
+    description: "Product studio working on talent and community platforms.",
+    updatedAt: "2024-02-13 11:30",
+  },
+]
+
+const initialReviews: ReviewItem[] = [
+  {
+    id: "review-1",
+    author: "Aman J.",
+    rating: 4,
+    message: "Helpful community with quick responses and polite admins.",
+    source: "Search Community",
+    status: "Visible",
+    createdAt: "2024-02-12 18:12",
+  },
+  {
+    id: "review-2",
+    author: "Priya S.",
+    rating: 3,
+    message: "Great listings but would love more filters for locations.",
+    source: "Mobile App",
+    status: "Hidden",
+    createdAt: "2024-02-09 12:44",
+  },
+]
+
+const createId = (prefix: string) => `${prefix}-${Date.now()}`
+
+const formatTimestamp = (value: unknown) => {
+  if (!value) return "—"
+  if (typeof value === "string") return value
+  if (typeof value === "number") return new Date(value).toLocaleString()
+  if (typeof value === "object" && value && "toDate" in value && typeof value.toDate === "function") {
+    return value.toDate().toLocaleString()
+  }
+  return "—"
+}
+
+export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState<TabId>("users")
+  const [users, setUsers] = useState<UserRecord[]>([])
+  const [usersLoading, setUsersLoading] = useState(true)
+  const [usersError, setUsersError] = useState<string | null>(null)
+  const [userQuery, setUserQuery] = useState("")
+
+  const [schools, setSchools] = useState<ListingItem[]>(initialSchools)
+  const [colleges, setColleges] = useState<ListingItem[]>(initialColleges)
+  const [jobs, setJobs] = useState<ListingItem[]>(initialJobs)
+  const [companies, setCompanies] = useState<ListingItem[]>(initialCompanies)
+  const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews)
+
+  useEffect(() => {
+    const usersRef = collection(db, "users")
+    const usersQuery = query(usersRef, orderBy("createdAt", "desc"))
+    const unsubscribe = onSnapshot(
+      usersQuery,
+      (snapshot) => {
+        const nextUsers = snapshot.docs.map((doc) => {
+          const data = doc.data() as Partial<UserRecord>
+          return {
+            id: doc.id,
+            name: data.name || "Unknown user",
+            phone: data.phone || "",
+            email: data.email || "",
+            provider: data.provider || "",
+            createdAt: data.createdAt,
+          }
+        })
+        setUsers(nextUsers)
+        setUsersLoading(false)
+        setUsersError(null)
+      },
+      (error) => {
+        console.error("Loading users failed:", error)
+        setUsers([])
+        setUsersLoading(false)
+        setUsersError(error?.message ?? "Unable to load users.")
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
+
+  const filteredUsers = useMemo(() => {
+    const query = userQuery.trim().toLowerCase()
+    if (!query) return users
+    return users.filter((user) => {
+      return (
+        user.name.toLowerCase().includes(query) ||
+        user.phone.toLowerCase().includes(query) ||
+        (user.email || "").toLowerCase().includes(query)
+      )
+    })
+  }, [userQuery, users])
+
+  const listingsTotal = schools.length + colleges.length + jobs.length + companies.length
+  const publishedListings =
+    schools.filter((item) => item.status === "Published").length +
+    colleges.filter((item) => item.status === "Published").length +
+    jobs.filter((item) => item.status === "Published").length +
+    companies.filter((item) => item.status === "Published").length
+  const hiddenReviews = reviews.filter((review) => review.status === "Hidden").length
+
+  const listingConfigMap: Record<ListingTabId, { label: string; items: ListingItem[]; setItems: Dispatch<SetStateAction<ListingItem[]>> }> = {
+    schools: { label: "School", items: schools, setItems: setSchools },
+    colleges: { label: "College", items: colleges, setItems: setColleges },
+    jobs: { label: "Job", items: jobs, setItems: setJobs },
+    companies: { label: "Company", items: companies, setItems: setCompanies },
+  }
+
+  const activeListingConfig =
+    activeTab === "schools" || activeTab === "colleges" || activeTab === "jobs" || activeTab === "companies"
+      ? listingConfigMap[activeTab]
+      : null
+
+  return (
+    <div className="relative min-h-screen bg-[#0B0D0F] text-[#E6E8EA]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(12,170,65,0.16),_transparent_55%)]" />
+      <div className="relative z-10 mx-auto max-w-6xl px-5 py-8 sm:px-8">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/70">
+              Admin Portal
+            </span>
+            <h1 className="mt-3 text-3xl font-semibold">Manage WorkHub</h1>
+            <p className="mt-1 text-sm text-white/60">
+              Review users, publish listings, and keep community feedback organized.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button className="h-9 bg-white/10 text-white hover:bg-white/20">Export snapshot</Button>
+            <Button className="h-9 bg-[#0CAA41] text-white hover:bg-[#0B5B32]">New announcement</Button>
+          </div>
+        </header>
+
+        <section className="mt-6 grid gap-4 md:grid-cols-3">
+          <SummaryCard title="Users" value={usersLoading ? "Loading..." : `${users.length}`} detail="Signed up" />
+          <SummaryCard title="Listings" value={`${publishedListings}/${listingsTotal}`} detail="Published" />
+          <SummaryCard title="Reviews" value={`${hiddenReviews}`} detail="Hidden" />
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-2">
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                  activeTab === tab.id ? "bg-white/15 text-white" : "text-white/60 hover:text-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-6">
+          {activeTab === "users" && (
+            <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Users</h2>
+                  <p className="text-sm text-white/60">Latest sign-ins synced from Firestore.</p>
+                </div>
+                <Input
+                  value={userQuery}
+                  onChange={(event) => setUserQuery(event.target.value)}
+                  placeholder="Search by name, email, or phone"
+                  className="h-10 w-full bg-white/10 text-white placeholder:text-white/40 sm:w-72"
+                />
+              </div>
+
+              {usersError && (
+                <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                  {usersError}
+                </div>
+              )}
+
+              <div className="mt-4 space-y-3">
+                {usersLoading ? (
+                  <p className="text-sm text-white/60">Loading users...</p>
+                ) : filteredUsers.length === 0 ? (
+                  <p className="text-sm text-white/60">No users match this search yet.</p>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">{user.name}</p>
+                        <p className="text-xs text-white/60">
+                          {user.email || "No email"} • {user.phone || "No phone"}
+                        </p>
+                      </div>
+                      <div className="text-xs text-white/60">
+                        <span className="rounded-full bg-white/10 px-2 py-1">{user.provider || "manual"}</span>
+                        <span className="ml-2">{formatTimestamp(user.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeListingConfig && (
+            <ListingsPanel
+              key={activeListingConfig.label}
+              label={activeListingConfig.label}
+              items={activeListingConfig.items}
+              setItems={activeListingConfig.setItems}
+            />
+          )}
+
+          {activeTab === "reviews" && <ReviewsPanel reviews={reviews} setReviews={setReviews} />}
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function SummaryCard({ title, value, detail }: { title: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <p className="text-xs uppercase tracking-[0.2em] text-white/50">{title}</p>
+      <p className="mt-3 text-2xl font-semibold">{value}</p>
+      <p className="mt-1 text-xs text-white/60">{detail}</p>
+    </div>
+  )
+}
+
+function ListingsPanel({
+  label,
+  items,
+  setItems,
+}: {
+  label: string
+  items: ListingItem[]
+  setItems: Dispatch<SetStateAction<ListingItem[]>>
+}) {
+  const [draft, setDraft] = useState({
+    name: "",
+    location: "",
+    status: "Draft" as ListingStatus,
+    description: "",
+  })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [filterQuery, setFilterQuery] = useState("")
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const filteredItems = useMemo(() => {
+    const query = filterQuery.trim().toLowerCase()
+    if (!query) return items
+    return items.filter((item) => {
+      return item.name.toLowerCase().includes(query) || item.location.toLowerCase().includes(query)
+    })
+  }, [filterQuery, items])
+
+  const resetDraft = () => {
+    setDraft({ name: "", location: "", status: "Draft", description: "" })
+    setEditingId(null)
+    setFormError(null)
+  }
+
+  const handleSave = () => {
+    const trimmedName = draft.name.trim()
+    if (!trimmedName) {
+      setFormError("Name is required.")
+      return
+    }
+    const updatedAt = new Date().toLocaleString()
+
+    if (editingId) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === editingId
+            ? { ...item, ...draft, name: trimmedName, updatedAt }
+            : item
+        )
+      )
+    } else {
+      const newItem: ListingItem = {
+        id: createId(label.toLowerCase()),
+        name: trimmedName,
+        location: draft.location.trim(),
+        status: draft.status,
+        description: draft.description.trim(),
+        updatedAt,
+      }
+      setItems((prev) => [newItem, ...prev])
+    }
+
+    resetDraft()
+  }
+
+  const handleEdit = (item: ListingItem) => {
+    setDraft({
+      name: item.name,
+      location: item.location,
+      status: item.status,
+      description: item.description,
+    })
+    setEditingId(item.id)
+    setFormError(null)
+  }
+
+  const handleDelete = (id: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== id))
+    if (editingId === id) {
+      resetDraft()
+    }
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">{label} listings</h2>
+            <p className="text-sm text-white/60">Add, edit, or retire a listing.</p>
+          </div>
+          <Input
+            value={filterQuery}
+            onChange={(event) => setFilterQuery(event.target.value)}
+            placeholder={`Search ${label.toLowerCase()} listings`}
+            className="h-10 w-full bg-white/10 text-white placeholder:text-white/40 sm:w-64"
+          />
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {filteredItems.length === 0 ? (
+            <p className="text-sm text-white/60">No listings match this search.</p>
+          ) : (
+            filteredItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{item.name}</p>
+                  <p className="text-xs text-white/60">
+                    {item.location || "No location"} • {item.updatedAt}
+                  </p>
+                  <p className="mt-2 text-xs text-white/60">{item.description || "No description"}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-white/10 px-2 py-1">{item.status}</span>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-white/10 text-white hover:bg-white/20"
+                    onClick={() => handleEdit(item)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-red-500/20 text-red-100 hover:bg-red-500/30"
+                    onClick={() => handleDelete(item.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
+        <h3 className="text-lg font-semibold">{editingId ? `Edit ${label}` : `Add ${label}`}</h3>
+        <p className="text-sm text-white/60">Fill in the details and save.</p>
+
+        <div className="mt-4 space-y-3">
+          <Input
+            value={draft.name}
+            onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+            placeholder={`${label} name`}
+            className="h-10 bg-white/10 text-white placeholder:text-white/40"
+          />
+          <Input
+            value={draft.location}
+            onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))}
+            placeholder="Location"
+            className="h-10 bg-white/10 text-white placeholder:text-white/40"
+          />
+          <select
+            value={draft.status}
+            onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as ListingStatus }))}
+            className="h-10 w-full rounded-md border border-white/10 bg-white/10 px-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+          >
+            <option value="Draft">Draft</option>
+            <option value="Published">Published</option>
+          </select>
+          <Textarea
+            value={draft.description}
+            onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+            placeholder="Short description"
+            className="min-h-[110px] bg-white/10 text-white placeholder:text-white/40"
+          />
+
+          {formError && <p className="text-xs text-red-300">{formError}</p>}
+
+          <div className="flex gap-2">
+            <Button className="flex-1 bg-[#0CAA41] text-white hover:bg-[#0B5B32]" onClick={handleSave}>
+              {editingId ? "Update listing" : "Add listing"}
+            </Button>
+            {editingId && (
+              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft}>
+                Cancel
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReviewsPanel({
+  reviews,
+  setReviews,
+}: {
+  reviews: ReviewItem[]
+  setReviews: Dispatch<SetStateAction<ReviewItem[]>>
+}) {
+  const [draft, setDraft] = useState({
+    author: "",
+    rating: 5,
+    message: "",
+    source: "",
+    status: "Visible" as ReviewStatus,
+  })
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const resetDraft = () => {
+    setDraft({ author: "", rating: 5, message: "", source: "", status: "Visible" })
+    setEditingId(null)
+  }
+
+  const handleSave = () => {
+    const trimmedAuthor = draft.author.trim() || "Anonymous"
+    const createdAt = new Date().toLocaleString()
+
+    if (editingId) {
+      setReviews((prev) =>
+        prev.map((review) =>
+          review.id === editingId
+            ? { ...review, ...draft, author: trimmedAuthor, createdAt }
+            : review
+        )
+      )
+    } else {
+      const newReview: ReviewItem = {
+        id: createId("review"),
+        author: trimmedAuthor,
+        rating: draft.rating,
+        message: draft.message.trim(),
+        source: draft.source.trim() || "Manual",
+        status: draft.status,
+        createdAt,
+      }
+      setReviews((prev) => [newReview, ...prev])
+    }
+    resetDraft()
+  }
+
+  const handleEdit = (review: ReviewItem) => {
+    setDraft({
+      author: review.author,
+      rating: review.rating,
+      message: review.message,
+      source: review.source,
+      status: review.status,
+    })
+    setEditingId(review.id)
+  }
+
+  const handleToggle = (id: string) => {
+    setReviews((prev) =>
+      prev.map((review) =>
+        review.id === id
+          ? { ...review, status: review.status === "Visible" ? "Hidden" : "Visible" }
+          : review
+      )
+    )
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
+        <div>
+          <h2 className="text-lg font-semibold">Reviews</h2>
+          <p className="text-sm text-white/60">Moderate feedback and keep it on-brand.</p>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {reviews.map((review) => (
+            <div
+              key={review.id}
+              className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="text-sm font-semibold">
+                  {review.author} • {review.rating}/5
+                </p>
+                <p className="text-xs text-white/60">
+                  {review.source} • {review.createdAt}
+                </p>
+                <p className="mt-2 text-xs text-white/60">{review.message || "No message"}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full bg-white/10 px-2 py-1">{review.status}</span>
+                <Button
+                  size="sm"
+                  className="h-8 bg-white/10 text-white hover:bg-white/20"
+                  onClick={() => handleEdit(review)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 bg-white/10 text-white hover:bg-white/20"
+                  onClick={() => handleToggle(review.id)}
+                >
+                  Toggle visibility
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
+        <h3 className="text-lg font-semibold">{editingId ? "Edit review" : "Add review"}</h3>
+        <p className="text-sm text-white/60">Capture customer feedback or test entries.</p>
+
+        <div className="mt-4 space-y-3">
+          <Input
+            value={draft.author}
+            onChange={(event) => setDraft((prev) => ({ ...prev, author: event.target.value }))}
+            placeholder="Reviewer name"
+            className="h-10 bg-white/10 text-white placeholder:text-white/40"
+          />
+          <Input
+            value={draft.source}
+            onChange={(event) => setDraft((prev) => ({ ...prev, source: event.target.value }))}
+            placeholder="Source (app, website, community)"
+            className="h-10 bg-white/10 text-white placeholder:text-white/40"
+          />
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/60">Rating</span>
+            <select
+              value={draft.rating}
+              onChange={(event) => setDraft((prev) => ({ ...prev, rating: Number(event.target.value) }))}
+              className="h-10 flex-1 rounded-md border border-white/10 bg-white/10 px-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+            >
+              {[1, 2, 3, 4, 5].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Textarea
+            value={draft.message}
+            onChange={(event) => setDraft((prev) => ({ ...prev, message: event.target.value }))}
+            placeholder="Review message"
+            className="min-h-[110px] bg-white/10 text-white placeholder:text-white/40"
+          />
+          <select
+            value={draft.status}
+            onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as ReviewStatus }))}
+            className="h-10 w-full rounded-md border border-white/10 bg-white/10 px-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+          >
+            <option value="Visible">Visible</option>
+            <option value="Hidden">Hidden</option>
+          </select>
+
+          <div className="flex gap-2">
+            <Button className="flex-1 bg-[#0CAA41] text-white hover:bg-[#0B5B32]" onClick={handleSave}>
+              {editingId ? "Update review" : "Add review"}
+            </Button>
+            {editingId && (
+              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft}>
+                Cancel
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

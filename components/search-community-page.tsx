@@ -15,9 +15,13 @@ export default function SearchCommunityPage() {
   const [isLocationOpen, setIsLocationOpen] = useState(false)
   const [selectedState, setSelectedState] = useState<string | null>(null)
   const [selectedCity, setSelectedCity] = useState<string | null>(null)
+  const [previewState, setPreviewState] = useState<string | null>(null)
   const [hoveredState, setHoveredState] = useState<string | null>(null)
   const [isSignInOpen, setIsSignInOpen] = useState(false)
+  const [supportsHover, setSupportsHover] = useState(false)
   const locationRef = useRef<HTMLDivElement>(null)
+  const citiesRef = useRef<HTMLDivElement>(null)
+  const lastStateTapRef = useRef<{ state: string | null; time: number }>({ state: null, time: 0 })
 
   const filteredStates = useMemo(() => {
     const query = locationQuery.trim().toLowerCase()
@@ -29,7 +33,8 @@ export default function SearchCommunityPage() {
     })
   }, [locationQuery])
 
-  const activeState = hoveredState ?? selectedState
+  const activeState = hoveredState ?? previewState ?? selectedState
+  const highlightState = previewState ?? selectedState
 
   const activeStateData = useMemo(() => {
     if (!activeState) return null
@@ -45,6 +50,61 @@ export default function SearchCommunityPage() {
     return activeStateData.cities.filter((city) => city.toLowerCase().includes(query))
   }, [locationQuery, activeStateData])
 
+  const handleStateSelect = (state: string) => {
+    setSelectedState(state)
+    setSelectedCity(null)
+    setPreviewState(null)
+    setLocationValue(state)
+    setLocationQuery("")
+    setHoveredState(null)
+    setIsLocationOpen(false)
+  }
+
+  const handleStatePreview = (state: string) => {
+    setSelectedCity(null)
+    setPreviewState(state)
+    setLocationQuery("")
+    setHoveredState(null)
+    setIsLocationOpen(true)
+    requestAnimationFrame(() => {
+      citiesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }
+
+  const handleStateClick = (state: string) => {
+    if (supportsHover) {
+      handleStateSelect(state)
+      return
+    }
+    const now = Date.now()
+    const lastTap = lastStateTapRef.current
+    if (lastTap.state === state && now - lastTap.time < 350) {
+      handleStateSelect(state)
+      lastStateTapRef.current = { state: null, time: 0 }
+      return
+    }
+    lastStateTapRef.current = { state, time: now }
+    handleStatePreview(state)
+  }
+
+  useEffect(() => {
+    const media = window.matchMedia("(hover: hover) and (pointer: fine)")
+    const handleChange = () => setSupportsHover(media.matches)
+    handleChange()
+    if (media.addEventListener) {
+      media.addEventListener("change", handleChange)
+    } else {
+      media.addListener(handleChange)
+    }
+    return () => {
+      if (media.removeEventListener) {
+        media.removeEventListener("change", handleChange)
+      } else {
+        media.removeListener(handleChange)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (!locationRef.current) return
@@ -52,6 +112,7 @@ export default function SearchCommunityPage() {
         setIsLocationOpen(false)
         setLocationQuery("")
         setHoveredState(null)
+        setPreviewState(null)
       }
     }
 
@@ -136,17 +197,12 @@ export default function SearchCommunityPage() {
                             <button
                               key={entry.state}
                               type="button"
-                              onMouseEnter={() => setHoveredState(entry.state)}
-                              onClick={() => {
-                                setSelectedState(entry.state)
-                                setSelectedCity(null)
-                                setLocationValue(entry.state)
-                                setLocationQuery("")
-                                setHoveredState(null)
-                                setIsLocationOpen(false)
+                              onMouseEnter={() => {
+                                if (supportsHover) setHoveredState(entry.state)
                               }}
+                              onClick={() => handleStateClick(entry.state)}
                               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                                selectedState === entry.state
+                                highlightState === entry.state
                                   ? "bg-[#0CAA41]/20 text-[#E6E8EA]"
                                   : "text-[#C2C7CC] hover:bg-[#2B3136]"
                               }`}
@@ -160,7 +216,7 @@ export default function SearchCommunityPage() {
                       </div>
                     </div>
 
-                    <div>
+                    <div ref={citiesRef}>
                       <p className="text-xs uppercase tracking-wide text-[#9AA0A6] mb-2">
                         {activeStateData ? `Cities in ${activeStateData.state}` : "Cities"}
                       </p>
@@ -175,6 +231,7 @@ export default function SearchCommunityPage() {
                                   setLocationValue(`${city}, ${activeStateData.state}`)
                                   setSelectedState(activeStateData.state)
                                   setSelectedCity(city)
+                                  setPreviewState(null)
                                   setHoveredState(null)
                                   setIsLocationOpen(false)
                                   setLocationQuery("")

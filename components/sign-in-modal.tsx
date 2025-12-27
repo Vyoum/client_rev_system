@@ -176,61 +176,85 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
+      <div 
+        className="absolute inset-0 bg-black/70 backdrop-blur-md transition-opacity duration-300" 
+        onClick={handleClose}
+      />
 
       {/* Modal */}
-      <div className="relative bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-[#333]">
+      <div 
+        className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/20 bg-[rgba(11,13,15,0.95)] backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/10"
+        style={{ backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}
+      >
+        {/* Close Button */}
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-[#E6E8EA] transition-all hover:bg-white/20 hover:scale-110"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
         {/* Header */}
-        <div className="bg-[#0CAA41] px-6 py-8 text-center">
-          <button
-            onClick={handleClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
-          <h2 className="text-2xl font-bold text-white mb-1">WorkHub</h2>
-          <p className="text-white/80 text-sm">{submitted ? "Welcome! You're all set" : "Sign in or sign up"}</p>
+        <div className="relative px-8 pt-10 pb-6 text-center">
+          <div className="mb-4 flex justify-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0CAA41] to-[#0B8A35] shadow-lg shadow-[#0CAA41]/20">
+              <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-[#E6E8EA] mb-2">Welcome to WorkHub</h2>
+          <p className="text-sm text-[#9AA0A6]">
+            {submitted ? "You're all set! 🎉" : "Sign in to continue or create an account"}
+          </p>
         </div>
 
         {/* Body */}
-        <div className="p-6">
+        <div className="px-8 pb-8">
           {submitted && submittedData ? (
             <div className="text-center">
-              <div className="w-16 h-16 bg-[#0CAA41]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-[#0CAA41]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-4">Details Received!</h3>
-
-              <div className="bg-[#2a2a2a] rounded-lg p-4 text-left space-y-2 mb-6">
-                <div>
-                  <span className="text-sm text-gray-400">Name:</span>
-                  <p className="font-medium text-white">{submittedData.name}</p>
-                </div>
-                <div>
-                  <span className="text-sm text-gray-400">Phone:</span>
-                  <p className="font-medium text-white">{submittedData.phone || "Not provided"}</p>
+              <div className="mb-6 flex justify-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#0CAA41]/20 to-[#0CAA41]/10 ring-4 ring-[#0CAA41]/10">
+                  <svg className="h-10 w-10 text-[#0CAA41]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
                 </div>
               </div>
+              <h3 className="text-xl font-semibold text-[#E6E8EA] mb-2">Success!</h3>
+              <p className="text-sm text-[#9AA0A6] mb-6">Your details have been saved successfully.</p>
 
-              <p className="text-sm text-gray-400 mb-4">Check the browser console to see the logged details.</p>
+              <div className="mb-6 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.05)] p-5 text-left backdrop-blur-sm">
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-xs font-medium uppercase tracking-wide text-[#9AA0A6]">Name</span>
+                    <p className="mt-1 text-base font-semibold text-[#E6E8EA]">{submittedData.name}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-medium uppercase tracking-wide text-[#9AA0A6]">Phone</span>
+                    <p className="mt-1 text-base font-semibold text-[#E6E8EA]">{submittedData.phone || "Not provided"}</p>
+                  </div>
+                </div>
+              </div>
 
-              <Button onClick={handleClose} className="w-full bg-[#0CAA41] hover:bg-[#0B5B32] text-white font-semibold">
+              <Button 
+                onClick={handleClose} 
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-[#0CAA41] to-[#0B8A35] text-white font-semibold shadow-lg shadow-[#0CAA41]/20 transition-all hover:shadow-[#0CAA41]/30 hover:scale-[1.02]"
+              >
                 Done
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <Button
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isGoogleLoading}
-                className="w-full h-12 bg-white text-[#1a1a1a] hover:bg-gray-100 font-semibold disabled:cursor-not-allowed disabled:opacity-80"
+                className="w-full h-12 rounded-xl border border-white/20 bg-white/10 px-6 py-3 text-[#E6E8EA] font-semibold backdrop-blur-sm transition-all hover:bg-white/15 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
-                <svg className="h-5 w-5 mr-2" viewBox="0 0 48 48" aria-hidden="true">
+                <svg className="h-5 w-5 mr-3" viewBox="0 0 48 48" aria-hidden="true">
                   <path
                     fill="#EA4335"
                     d="M24 9.5c3.54 0 6.73 1.22 9.23 3.22l6.9-6.9C35.84 2.1 30.3 0 24 0 14.6 0 6.51 5.38 2.67 13.22l8.06 6.26C12.7 13.28 17.9 9.5 24 9.5z"
@@ -248,34 +272,38 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                     d="M24 48c6.3 0 11.84-2.08 15.79-5.63l-7.05-5.48c-2.04 1.37-4.67 2.18-8.74 2.18-6.1 0-11.3-3.78-13.27-9.38l-8.06 6.26C6.51 42.62 14.6 48 24 48z"
                   />
                 </svg>
-                {isGoogleLoading ? "Opening Google..." : "Continue with Google"}
+                {isGoogleLoading ? "Connecting..." : "Continue with Google"}
               </Button>
 
-              {submitError && <p className="text-xs text-red-400 text-center">{submitError}</p>}
+              {submitError && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                  <p className="text-xs font-medium text-red-400 text-center">{submitError}</p>
+                </div>
+              )}
 
-              <div className="flex items-center gap-3 text-xs text-gray-400">
-                <div className="h-px flex-1 bg-[#333]" />
-                <span>or</span>
-                <div className="h-px flex-1 bg-[#333]" />
+              <div className="flex items-center gap-4">
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="text-xs font-medium text-[#9AA0A6]">OR</span>
+                <div className="h-px flex-1 bg-white/10" />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-white font-medium">
+              <div className="space-y-3">
+                <Label htmlFor="name" className="text-sm font-semibold text-[#E6E8EA]">
                   Full Name
                 </Label>
                 <Input
                   id="name"
                   type="text"
-                  placeholder="Enter your name"
+                  placeholder="Enter your full name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="h-12 bg-[#2a2a2a] border-[#333] text-white placeholder-gray-500 focus:border-[#0CAA41] focus:ring-[#0CAA41]"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="text-white font-medium">
+              <div className="space-y-3">
+                <Label htmlFor="phone" className="text-sm font-semibold text-[#E6E8EA]">
                   Phone Number
                 </Label>
                 <Input
@@ -285,25 +313,25 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  className="h-12 bg-[#2a2a2a] border-[#333] text-white placeholder-gray-500 focus:border-[#0CAA41] focus:ring-[#0CAA41]"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
                 />
               </div>
 
               <Button
                 type="submit"
                 disabled={isSaving}
-                className="w-full h-12 bg-[#0CAA41] hover:bg-[#0B5B32] text-white font-semibold text-base"
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-[#0CAA41] to-[#0B8A35] text-white font-semibold shadow-lg shadow-[#0CAA41]/20 transition-all hover:shadow-[#0CAA41]/30 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 {isSaving ? "Saving..." : "Continue"}
               </Button>
 
-              <p className="text-xs text-center text-gray-400">
+              <p className="text-xs text-center leading-relaxed text-[#9AA0A6]">
                 By continuing, you agree to WorkHub's{" "}
-                <a href="#" className="text-[#0CAA41] hover:underline">
+                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
                   Terms of Use
                 </a>{" "}
                 and{" "}
-                <a href="#" className="text-[#0CAA41] hover:underline">
+                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
                   Privacy Policy
                 </a>
                 .
