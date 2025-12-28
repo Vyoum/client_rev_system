@@ -308,14 +308,27 @@ export default function SearchCommunityPage() {
         updatedAt: serverTimestamp(),
       }
 
-      await addDoc(collection(db, "reviews"), reviewData)
+      console.log("Submitting review to Firebase:", {
+        collection: "reviews",
+        data: reviewData,
+        listingId: selectedListing.id,
+        listingName: selectedListing.name
+      })
+
+      const docRef = await addDoc(collection(db, "reviews"), reviewData)
+      console.log("Review successfully saved to Firestore with ID:", docRef.id)
       
       // Reset form
       setReviewForm({ rating: 5, message: "" })
       setReviewError(null)
     } catch (error) {
       console.error("Error submitting review:", error)
-      setReviewError("Failed to submit review. Please try again.")
+      console.error("Error details:", {
+        code: error?.code,
+        message: error?.message,
+        stack: error?.stack
+      })
+      setReviewError(`Failed to submit review: ${error?.message || "Unknown error"}. Please check console for details.`)
     } finally {
       setIsSubmittingReview(false)
     }
@@ -471,41 +484,29 @@ export default function SearchCommunityPage() {
       {/* Header */}
       <header className="relative flex items-center justify-center px-4 sm:px-5 pt-8 pb-6 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full">
         {selectedListing ? (
-          <>
-            <button
-              type="button"
-              onClick={handleCloseListing}
-              className="absolute left-2 top-8 flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] transition-colors z-10"
-              aria-label="Back to results"
-            >
-              <ChevronLeft className="h-5 w-5 text-[#111827]" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsSignInOpen(true)}
-              className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors z-10"
-              aria-label="Open profile"
-            >
-              <User className="h-6 w-6 text-[#111827]" />
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={handleCloseListing}
+            className="absolute left-4 top-8 flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] transition-colors z-10 shadow-sm"
+            aria-label="Back to results"
+          >
+            <ChevronLeft className="h-5 w-5 text-[#111827]" />
+          </button>
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setIsSignInOpen(true)}
-              className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors z-10"
-              aria-label="Open profile"
-            >
-              <User className="h-6 w-6 text-[#111827]" />
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => setIsSignInOpen(true)}
+            className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors z-10"
+            aria-label="Open profile"
+          >
+            <User className="h-6 w-6 text-[#111827]" />
+          </button>
         )}
       </header>
 
       {selectedListing ? (
         <div className="px-4 sm:px-5 mt-2 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full pb-10">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 pl-12 sm:pl-14">
             <div className="flex items-center gap-3">
               {selectedListing.logoUrl ? (
                 <img
@@ -680,30 +681,31 @@ export default function SearchCommunityPage() {
                   <div className="space-y-4">
                     {reviews.map((review) => (
                       <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
-                              {review.authorName.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-[#111827]">{review.authorName}</p>
-                              <p className="text-xs text-[#6B7280]">
-                                {(() => {
-                                  if (!review.createdAt) return "Recently"
-                                  if (typeof review.createdAt === "string") {
-                                    return new Date(review.createdAt).toLocaleDateString()
-                                  }
-                                  if (review.createdAt && typeof review.createdAt === "object" && "toDate" in review.createdAt) {
-                                    return review.createdAt.toDate().toLocaleDateString()
-                                  }
-                                  return "Recently"
-                                })()}
-                              </p>
-                            </div>
+                        <div className="flex items-start gap-2 mb-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
+                            {review.authorName.charAt(0).toUpperCase()}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-sm font-semibold text-[#111827]">{review.rating}</span>
-                            <StarIcon />
+                          <div className="flex-1">
+                            <p className="text-sm text-[#111827]">
+                              <span className="font-semibold">{review.authorName}</span>
+                              {typeof review.rating === "number" && (
+                                <span className="font-bold text-[#111827] ml-2">
+                                  {review.rating.toFixed(1)}★
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs text-[#6B7280] mt-0.5">
+                              {(() => {
+                                if (!review.createdAt) return "Recently"
+                                if (typeof review.createdAt === "string") {
+                                  return new Date(review.createdAt).toLocaleDateString()
+                                }
+                                if (review.createdAt && typeof review.createdAt === "object" && "toDate" in review.createdAt) {
+                                  return review.createdAt.toDate().toLocaleDateString()
+                                }
+                                return "Recently"
+                              })()}
+                            </p>
                           </div>
                         </div>
                         <p className="text-sm text-[#4B5563] whitespace-pre-wrap">{review.message}</p>
@@ -948,18 +950,33 @@ export default function SearchCommunityPage() {
             <div className="rounded-2xl border border-[#E5E7EB] bg-white">
               <ul className="divide-y divide-[#E5E7EB]">
                 {filteredListings.map((listing) => {
-                  const metaParts: string[] = []
+                  // Build stats parts (excluding reviews, which will be shown with rating)
+                  const statsParts: string[] = []
                   if (typeof listing.jobsCount === "number") {
-                    metaParts.push(`${formatCount(listing.jobsCount)} jobs`)
-                  }
-                  if (typeof listing.reviewsCount === "number") {
-                    metaParts.push(`${formatCount(listing.reviewsCount)} reviews`)
+                    statsParts.push(`${formatCount(listing.jobsCount)} jobs`)
                   }
                   if (typeof listing.salariesCount === "number") {
-                    metaParts.push(`${formatCount(listing.salariesCount)} salaries`)
+                    statsParts.push(`${formatCount(listing.salariesCount)} salaries`)
                   }
+                  
+                  // Build rating and reviews line
+                  const ratingAndReviews: string[] = []
+                  if (typeof listing.rating === "number") {
+                    ratingAndReviews.push(`${listing.rating.toFixed(1)}★`)
+                  }
+                  if (typeof listing.reviewsCount === "number") {
+                    ratingAndReviews.push(`${formatCount(listing.reviewsCount)} reviews`)
+                  }
+                  
+                  // Combine all parts
+                  const metaParts: string[] = []
+                  if (ratingAndReviews.length > 0) {
+                    metaParts.push(ratingAndReviews.join(" "))
+                  }
+                  metaParts.push(...statsParts)
+                  
                   const locationDisplay = [listing.city, listing.state].filter(Boolean).join(", ") || "Location not specified"
-                  const metaLine = metaParts.length > 0 ? metaParts.join(" | ") : locationDisplay
+                  const metaLine = metaParts.length > 0 ? metaParts.join(" · ") : locationDisplay
                   const showDescription = !metaParts.length && listing.description
 
                   return (
@@ -983,16 +1000,25 @@ export default function SearchCommunityPage() {
                         )}
 
                         <div className="flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
-                            {typeof listing.rating === "number" && (
-                              <span className="flex items-center gap-1 text-sm text-[#111827]">
-                                {listing.rating.toFixed(1)}
-                                <StarIcon />
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-sm text-[#6B7280]">{metaLine}</p>
+                          <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
+                          <p className="mt-1 text-sm text-[#6B7280]">
+                            {typeof listing.rating === "number" ? (
+                              <>
+                                <span className="font-bold text-[#111827]">
+                                  {listing.rating.toFixed(1)}★
+                                  {typeof listing.reviewsCount === "number" ? ` ${formatCount(listing.reviewsCount)} reviews` : ""}
+                                </span>
+                                {statsParts.length > 0 && " · "}
+                              </>
+                            ) : typeof listing.reviewsCount === "number" ? (
+                              <>
+                                <span className="text-[#6B7280]">{formatCount(listing.reviewsCount)} reviews</span>
+                                {statsParts.length > 0 && " · "}
+                              </>
+                            ) : null}
+                            {statsParts.length > 0 && statsParts.join(" · ")}
+                            {metaParts.length === 0 && locationDisplay}
+                          </p>
                           {showDescription && (
                             <p className="mt-1 text-sm text-[#4B5563] line-clamp-2">{listing.description}</p>
                           )}
