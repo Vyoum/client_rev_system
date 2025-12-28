@@ -19,7 +19,7 @@ const detailTabs = [
 type ListingItem = {
   id: string
   name: string
-  location: string
+  location?: string // Optional - derived from city + state
   state?: string
   city?: string
   status: "Draft" | "Published"
@@ -31,6 +31,7 @@ type ListingItem = {
   salariesCount?: number | null
   logoUrl?: string
   website?: string
+  locationLink?: string
   employeeCount?: string
   type?: string
   revenue?: string
@@ -372,7 +373,6 @@ export default function SearchCommunityPage() {
             return {
               id: doc.id,
               name: data.name || "",
-              location: data.location || "",
               state: data.state || "",
               city: data.city || "",
               status: data.status || "Draft",
@@ -384,6 +384,7 @@ export default function SearchCommunityPage() {
               salariesCount: parseNumber(data.salariesCount ?? data.salaries),
               logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
               website: typeof data.website === "string" ? data.website : "",
+              locationLink: typeof data.locationLink === "string" ? data.locationLink : "",
               employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
               type: typeof data.type === "string" ? data.type : "",
               revenue: typeof data.revenue === "string" ? data.revenue : "",
@@ -417,30 +418,33 @@ export default function SearchCommunityPage() {
   const filteredListings = useMemo(() => {
     let filtered = listings
 
-    // Filter by search query
+    // Filter by search query - using city and state fields only
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase()
       filtered = filtered.filter(
         (listing) =>
           listing.name.toLowerCase().includes(query) ||
           listing.description.toLowerCase().includes(query) ||
-          listing.location.toLowerCase().includes(query)
+          listing.city?.toLowerCase().includes(query) ||
+          listing.state?.toLowerCase().includes(query)
       )
     }
 
-    // Filter by location
+    // Filter by location - using city and state fields as primary source
     if (selectedCity && selectedState) {
       filtered = filtered.filter(
-        (listing) =>
-          (listing.city?.toLowerCase() === selectedCity.toLowerCase() &&
-            listing.state?.toLowerCase() === selectedState.toLowerCase()) ||
-          listing.location.toLowerCase().includes(selectedCity.toLowerCase())
+        (listing) => {
+          const cityMatch = listing.city?.toLowerCase() === selectedCity.toLowerCase()
+          const stateMatch = listing.state?.toLowerCase() === selectedState.toLowerCase()
+          
+          // Primary: Exact match on both city and state fields
+          return cityMatch && stateMatch
+        }
       )
     } else if (selectedState) {
       filtered = filtered.filter(
         (listing) =>
-          listing.state?.toLowerCase() === selectedState.toLowerCase() ||
-          listing.location.toLowerCase().includes(selectedState.toLowerCase())
+          listing.state?.toLowerCase() === selectedState.toLowerCase()
       )
     }
 
@@ -573,6 +577,17 @@ export default function SearchCommunityPage() {
                   className="inline-flex items-center gap-2 text-sm font-semibold text-orange-500 hover:text-orange-600"
                 >
                   {selectedListing.website}
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
+              {selectedListing.locationLink && (
+                <a
+                  href={normalizeUrl(selectedListing.locationLink)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-orange-500 hover:text-orange-600"
+                >
+                  View on Maps
                   <ExternalLink className="h-4 w-4" />
                 </a>
               )}
@@ -761,7 +776,7 @@ export default function SearchCommunityPage() {
               <CuteSearchIcon />
               <input
                 type="text"
-                placeholder={activeTab}
+                placeholder="Search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent text-[#111827] placeholder-[#6B7280] outline-none text-[15px]"
@@ -943,7 +958,8 @@ export default function SearchCommunityPage() {
                   if (typeof listing.salariesCount === "number") {
                     metaParts.push(`${formatCount(listing.salariesCount)} salaries`)
                   }
-                  const metaLine = metaParts.length > 0 ? metaParts.join(" | ") : listing.location || "Location not specified"
+                  const locationDisplay = [listing.city, listing.state].filter(Boolean).join(", ") || "Location not specified"
+                  const metaLine = metaParts.length > 0 ? metaParts.join(" | ") : locationDisplay
                   const showDescription = !metaParts.length && listing.description
 
                   return (
@@ -1077,7 +1093,7 @@ const normalizeUrl = (value: string) => {
 }
 
 const getListingLocation = (listing: ListingItem) => {
-  if (listing.location) return listing.location
+  // Use city and state fields only
   const parts = [listing.city, listing.state].filter(Boolean)
-  return parts.join(", ")
+  return parts.length > 0 ? parts.join(", ") : "Location not specified"
 }

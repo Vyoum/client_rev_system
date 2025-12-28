@@ -3,12 +3,11 @@
 import type { Dispatch, SetStateAction } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { collection, onSnapshot, orderBy, query, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from "firebase/firestore"
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { db, storage, auth } from "@/lib/firebase"
-import { X, Upload, Image as ImageIcon } from "lucide-react"
+import { db, auth } from "@/lib/firebase"
+import { X, ExternalLink, Upload } from "lucide-react"
 
 type ListingStatus = "Draft" | "Published"
 type ReviewStatus = "Visible" | "Hidden"
@@ -16,7 +15,7 @@ type ReviewStatus = "Visible" | "Hidden"
 type ListingItem = {
   id: string
   name: string
-  location: string
+  location?: string // Optional - derived from city + state for backward compatibility
   state?: string
   city?: string
   status: ListingStatus
@@ -32,6 +31,7 @@ type ListingItem = {
   locationsCount?: number | null
   logoUrl?: string
   website?: string
+  locationLink?: string
   employeeCount?: string
   type?: string
   revenue?: string
@@ -645,7 +645,6 @@ function ListingsPanel({
 }) {
   const [draft, setDraft] = useState({
     name: "",
-    location: "",
     state: "",
     city: "",
     status: "Published" as ListingStatus,
@@ -659,6 +658,7 @@ function ListingsPanel({
     locationsCount: "",
     logoUrl: "",
     website: "",
+    locationLink: "",
     employeeCount: "",
     type: "",
     revenue: "",
@@ -672,21 +672,24 @@ function ListingsPanel({
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
-  const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
 
   const filteredItems = useMemo(() => {
     const query = filterQuery.trim().toLowerCase()
     if (!query) return items
     return items.filter((item) => {
-      return item.name.toLowerCase().includes(query) || item.location.toLowerCase().includes(query)
+      return (
+        item.name.toLowerCase().includes(query) ||
+        item.city?.toLowerCase().includes(query) ||
+        item.state?.toLowerCase().includes(query)
+      )
     })
   }, [filterQuery, items])
 
   const resetDraft = () => {
     setDraft({
       name: "",
-      location: "",
       state: "",
       city: "",
       status: "Published",
@@ -700,6 +703,7 @@ function ListingsPanel({
       locationsCount: "",
       logoUrl: "",
       website: "",
+      locationLink: "",
       employeeCount: "",
       type: "",
       revenue: "",
@@ -710,46 +714,68 @@ function ListingsPanel({
     setEditingId(null)
     setFormError(null)
     setPhotoFiles([])
-    setExistingPhotoUrls([])
+    setUploadProgress({})
     setActiveFormSection("whatsnew")
   }
 
-  const parseLocation = (location: string) => {
-    // Try to parse "City, State" format
-    const parts = location.split(",").map((p) => p.trim())
-    if (parts.length >= 2) {
-      return { city: parts[0], state: parts.slice(1).join(", ") }
-    }
-    return { city: "", state: location }
-  }
+  // Cloudinary upload function
+  const uploadToCloudinary = async (file: File, index: number): Promise<string> => {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
 
-  const uploadPhoto = async (file: File, listingId: string): Promise<string> => {
+    if (!cloudName || !uploadPreset) {
+      throw new Error("Cloudinary credentials not configured. Please check your environment variables.")
+    }
+
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("upload_preset", uploadPreset)
+    formData.append("folder", "listings") // Optional: organize uploads in a folder
+
     try {
-      const fileExtension = file.name.split(".").pop() || "jpg"
-      const fileName = `${listingId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`
-      const storageRef = ref(storage, `listings/${collectionName}/${fileName}`)
-      const snapshot = await uploadBytes(storageRef, file)
-      const downloadURL = await getDownloadURL(snapshot.ref)
-      return downloadURL
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error?.message || `Upload failed: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      return data.secure_url // Returns the CDN URL
     } catch (error: any) {
-      console.error("Error uploading photo:", file.name, error)
-      throw new Error(`Failed to upload ${file.name}: ${error?.message || "Unknown error"}`)
+      console.error(`Error uploading ${file.name}:`, error)
+      throw error
     }
   }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     const imageFiles = files.filter((file) => file.type.startsWith("image/"))
-    
+
     if (imageFiles.length === 0) {
       setFormError("Please select image files only.")
       return
     }
 
-    // Limit to 10 photos
-    const remainingSlots = 10 - (existingPhotoUrls.length + photoFiles.length)
+    // Limit to 10 photos total
+    const existingUrls = draft.photos
+      .split("\n")
+      .map((url) => url.trim())
+      .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))
+    const remainingSlots = 10 - (existingUrls.length + photoFiles.length)
+
     if (imageFiles.length > remainingSlots) {
       setFormError(`You can only upload ${remainingSlots} more photo(s). Maximum 10 photos allowed.`)
+      return
+    }
+
+    // Check file sizes (max 10MB per file)
+    const oversizedFiles = imageFiles.filter((file) => file.size > 10 * 1024 * 1024)
+    if (oversizedFiles.length > 0) {
+      setFormError(`Some files are too large. Maximum file size is 10MB.`)
       return
     }
 
@@ -758,11 +784,16 @@ function ListingsPanel({
   }
 
   const removePhotoFile = (index: number) => {
-    setPhotoFiles((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const removeExistingPhoto = (index: number) => {
-    setExistingPhotoUrls((prev) => prev.filter((_, i) => i !== index))
+    setPhotoFiles((prev) => {
+      const newFiles = prev.filter((_, i) => i !== index)
+      // Clear progress for removed file
+      setUploadProgress((prevProgress) => {
+        const newProgress = { ...prevProgress }
+        delete newProgress[index]
+        return newProgress
+      })
+      return newFiles
+    })
   }
 
   const handleSave = async () => {
@@ -780,15 +811,14 @@ function ListingsPanel({
         throw new Error("Collection name is missing")
       }
       
-      const locationValue = draft.location.trim()
-      const locationData = parseLocation(locationValue)
-      const cityValue = draft.city.trim() || locationData.city
-      const stateValue = draft.state.trim() || locationData.state
-      const resolvedLocation = locationValue || [cityValue, stateValue].filter(Boolean).join(", ")
+      const cityValue = draft.city.trim()
+      const stateValue = draft.state.trim()
+      // Derive location from city and state for backward compatibility
+      const derivedLocation = [cityValue, stateValue].filter(Boolean).join(", ")
       
       const listingData: Record<string, unknown> = {
         name: trimmedName,
-        location: resolvedLocation || "",
+        location: derivedLocation, // Keep for backward compatibility, derived from city+state
         status: draft.status,
         description: draft.description.trim() || "",
         updatedAt: serverTimestamp(),
@@ -827,6 +857,9 @@ function ListingsPanel({
       const website = draft.website.trim()
       if (website) listingData.website = website
       
+      const locationLink = draft.locationLink.trim()
+      if (locationLink) listingData.locationLink = locationLink
+      
       const employeeCount = draft.employeeCount.trim()
       if (employeeCount) listingData.employeeCount = employeeCount
       
@@ -842,8 +875,10 @@ function ListingsPanel({
       const industry = draft.industry.trim()
       if (industry) listingData.industry = industry
       
-      // Also parse photos from textarea (for backward compatibility)
-      let photoUrls: string[] = [...existingPhotoUrls]
+      // Collect photo URLs
+      let photoUrls: string[] = []
+
+      // Parse photos from textarea (one URL per line)
       const photosText = draft.photos.trim()
       if (photosText) {
         const photosArray = photosText
@@ -853,93 +888,79 @@ function ListingsPanel({
         photoUrls = [...photoUrls, ...photosArray]
       }
 
-      // Get or create listing ID first
-      let listingId: string
-      if (editingId) {
-        listingId = editingId
-        // Update existing listing first (without photos)
-        const listingRef = doc(db, collectionName, listingId)
-        await updateDoc(listingRef, listingData)
-      } else {
-        // Create new listing first to get the ID
-        const docRef = await addDoc(collection(db, collectionName), {
-          ...listingData,
-          createdAt: serverTimestamp(),
-        })
-        listingId = docRef.id
-      }
-
-      // Upload photos after we have the listing ID
+      // Upload new photo files to Cloudinary
       if (photoFiles.length > 0) {
-        // Check if user is authenticated
-        if (!auth.currentUser) {
-          setFormError("You must be signed in to upload photos. Please sign in and try again.")
-          setSaving(false)
-          return
-        }
-
         setUploadingPhotos(true)
         try {
-          console.log(`Uploading ${photoFiles.length} photo(s)...`)
-          const uploadPromises = photoFiles.map((file, index) => {
-            console.log(`Uploading photo ${index + 1}/${photoFiles.length}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`)
-            return uploadPhoto(file, listingId)
+          const uploadPromises = photoFiles.map(async (file, index) => {
+            try {
+              const url = await uploadToCloudinary(file, index)
+              setUploadProgress((prev) => ({ ...prev, [index]: 100 }))
+              return url
+            } catch (error) {
+              console.error(`Failed to upload ${file.name}:`, error)
+              throw error
+            }
           })
+
           const uploadedUrls = await Promise.all(uploadPromises)
-          console.log("All photos uploaded successfully:", uploadedUrls)
           photoUrls = [...photoUrls, ...uploadedUrls]
-          
-          // Update listing with photo URLs
-          const listingRef = doc(db, collectionName, listingId)
-          await updateDoc(listingRef, { photos: photoUrls })
-          console.log("Listing updated with photo URLs")
+          console.log("All photos uploaded successfully to Cloudinary")
         } catch (error: any) {
-          console.error("Error uploading photos:", error)
-          let errorMessage = error?.message || "Unknown error occurred"
+          console.error("Error uploading photos to Cloudinary:", error)
+          const errorMessage = error?.message || "Unknown error occurred"
           
-          // Provide more helpful error messages
-          if (error?.code === "storage/unauthorized") {
-            errorMessage = "Storage permission denied. Please check Firebase Storage rules."
-          } else if (error?.code === "storage/canceled") {
-            errorMessage = "Upload was canceled."
-          } else if (error?.code === "storage/unknown") {
-            errorMessage = "Unknown storage error. Please check your Firebase configuration."
+          // Provide helpful error messages
+          if (errorMessage.includes("Cloudinary credentials")) {
+            setFormError("Cloudinary is not configured. Please check CLOUDINARY_SETUP.md for setup instructions.")
+          } else if (errorMessage.includes("Upload preset")) {
+            setFormError("Cloudinary upload preset not found. Please check your environment variables.")
+          } else {
+            setFormError(`Failed to upload photos: ${errorMessage}. Please try again.`)
           }
-          
-          setFormError(`Failed to upload photos: ${errorMessage}. Check console for details.`)
           setUploadingPhotos(false)
           setSaving(false)
           return
         } finally {
-          // Always reset upload state
           setUploadingPhotos(false)
+          setUploadProgress({})
         }
-      } else if (photoUrls.length > 0) {
-        // If we have photo URLs but no new files, just update the photos field
-        const listingRef = doc(db, collectionName, listingId)
-        await updateDoc(listingRef, { photos: photoUrls })
+      }
+
+      // Add photos to listing data
+      if (photoUrls.length > 0) {
+        listingData.photos = photoUrls
       }
 
       console.log("Saving to collection:", collectionName)
       console.log("Listing data:", listingData)
+
+      if (editingId) {
+        // Update existing listing
+        const listingRef = doc(db, collectionName, editingId)
+        await updateDoc(listingRef, listingData)
+      } else {
+        // Create new listing
+        await addDoc(collection(db, collectionName), {
+          ...listingData,
+          createdAt: serverTimestamp(),
+        })
+    }
 
     resetDraft()
     } catch (error: any) {
       console.error("Error saving listing:", error)
       const errorMessage = error?.message || "Unknown error occurred"
       setFormError(`Failed to save listing: ${errorMessage}. Please check the console for details.`)
-      setUploadingPhotos(false) // Ensure upload state is reset on error
     } finally {
       setSaving(false)
-      setUploadingPhotos(false) // Ensure upload state is always reset
+      setUploadingPhotos(false)
     }
   }
 
   const handleEdit = (item: ListingItem) => {
-    const fallbackLocation = item.location || [item.city, item.state].filter(Boolean).join(", ")
     setDraft({
       name: item.name,
-      location: fallbackLocation,
       state: item.state || "",
       city: item.city || "",
       status: item.status,
@@ -953,6 +974,7 @@ function ListingsPanel({
       locationsCount: item.locationsCount != null ? String(item.locationsCount) : "",
       logoUrl: item.logoUrl || "",
       website: item.website || "",
+      locationLink: item.locationLink || "",
       employeeCount: item.employeeCount || "",
       type: item.type || "",
       revenue: item.revenue || "",
@@ -963,7 +985,14 @@ function ListingsPanel({
     setEditingId(item.id)
     setFormError(null)
     setPhotoFiles([])
-    setExistingPhotoUrls(item.photos && item.photos.length > 0 ? item.photos : [])
+    setUploadProgress({})
+    // Convert photos array to newline-separated string for textarea
+    if (item.photos && item.photos.length > 0) {
+      setDraft((prev) => ({
+        ...prev,
+        photos: item.photos!.join("\n")
+      }))
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -983,7 +1012,7 @@ function ListingsPanel({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
       <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1012,7 +1041,7 @@ function ListingsPanel({
                 <div>
                   <p className="text-sm font-semibold">{item.name}</p>
                   <p className="text-xs text-white/60">
-                    {item.location || "No location"} • {item.updatedAt}
+                    {[item.city, item.state].filter(Boolean).join(", ") || "No location"} • {item.updatedAt}
                   </p>
                   <p className="mt-2 text-xs text-white/60">{item.description || "No description"}</p>
                 </div>
@@ -1054,32 +1083,24 @@ function ListingsPanel({
           />
           <div className="grid gap-3 sm:grid-cols-2">
           <Input
-            value={draft.location}
-            onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))}
-              placeholder="Location (City, State)"
-            className="h-10 bg-white/10 text-white placeholder:text-white/40"
-          />
-            <Input
               value={draft.state}
               onChange={(event) => setDraft((prev) => ({ ...prev, state: event.target.value }))}
               placeholder="State"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+            className="h-10 bg-white/10 text-white placeholder:text-white/40"
+          />
             <Input
               value={draft.city}
               onChange={(event) => setDraft((prev) => ({ ...prev, city: event.target.value }))}
               placeholder="City"
               className="h-10 bg-white/10 text-white placeholder:text-white/40"
             />
-            <Input
-              value={draft.website}
-              onChange={(event) => setDraft((prev) => ({ ...prev, website: event.target.value }))}
-              placeholder="Website"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
           </div>
+          <Input
+            value={draft.website}
+            onChange={(event) => setDraft((prev) => ({ ...prev, website: event.target.value }))}
+            placeholder="Website"
+            className="h-10 bg-white/10 text-white placeholder:text-white/40"
+          />
           <Input
             value={draft.logoUrl}
             onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
@@ -1149,93 +1170,145 @@ function ListingsPanel({
           {/* Photos Section */}
           {activeFormSection === "photos" && (
             <div>
-            <label className="block text-xs text-white/60 mb-2">Photos (Upload or enter URLs)</label>
-            
-            {/* File Upload */}
-            <div className="mb-3">
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <Upload className="h-8 w-8 text-white/60 mb-2" />
-                  <p className="text-sm text-white/80 font-medium">Click to upload photos</p>
-                  <p className="text-xs text-white/50 mt-1">PNG, JPG, GIF up to 10MB (Max 10 photos)</p>
+              <label className="block text-xs text-white/60 mb-2">Photos</label>
+              <p className="text-xs text-white/40 mb-3">
+                Upload photos directly or enter image URLs. Maximum 10 photos total.
+              </p>
+              
+              {/* File Upload */}
+              <div className="mb-4">
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Upload className="h-8 w-8 text-white/60 mb-2" />
+                    <p className="text-sm text-white/80 font-medium">
+                      {uploadingPhotos ? "Uploading..." : "Click to upload photos"}
+                    </p>
+                    <p className="text-xs text-white/50 mt-1">PNG, JPG, GIF up to 10MB each</p>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                    onChange={handlePhotoUpload}
+                    disabled={uploadingPhotos || saving}
+                  />
+                </label>
+              </div>
+
+              {/* Photo Files Preview */}
+              {photoFiles.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs text-white/60 mb-2">
+                    {photoFiles.length} file(s) ready to upload
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {photoFiles.map((file, index) => (
+                      <div key={index} className="relative group">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-24 object-cover rounded-lg border border-white/10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePhotoFile(index)}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-red-500/80 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                          disabled={uploadingPhotos || saving}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        <div className="absolute bottom-1 left-1 right-1">
+                          <p className="text-[10px] text-white/80 bg-black/60 rounded px-1 truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-[10px] text-white/60 bg-black/60 rounded px-1 mt-0.5">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoUpload}
+              )}
+
+              {/* URL Input (Alternative/Additional) */}
+              <details className="mb-4">
+                <summary className="text-xs text-white/60 cursor-pointer hover:text-white/80 mb-2">
+                  Or enter photo URLs manually (one per line)
+                </summary>
+                <Textarea
+                  value={draft.photos}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, photos: event.target.value }))}
+                  placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg&#10;https://example.com/photo3.jpg"
+                  className="mt-2 min-h-[100px] bg-white/10 text-white placeholder:text-white/40"
+                  rows={4}
                   disabled={uploadingPhotos || saving}
                 />
-              </label>
-            </div>
-
-            {/* Photo Previews */}
-            {(existingPhotoUrls.length > 0 || photoFiles.length > 0) && (
-              <div className="mb-3">
-                <p className="text-xs text-white/60 mb-2">
-                  {existingPhotoUrls.length + photoFiles.length} photo(s) selected
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {/* Existing Photos */}
-                  {existingPhotoUrls.map((url, index) => (
-                    <div key={`existing-${index}`} className="relative group">
-                      <img
-                        src={url}
-                        alt={`Photo ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg border border-white/10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeExistingPhoto(index)}
-                        className="absolute top-1 right-1 p-1 rounded-full bg-red-500/80 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        disabled={uploadingPhotos || saving}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+              </details>
+              
+              {/* Combined Photo Preview */}
+              {(() => {
+                const photoUrls = draft.photos
+                  .split("\n")
+                  .map((url) => url.trim())
+                  .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))
+                
+                const totalPhotos = photoUrls.length + photoFiles.length
+                
+                if (totalPhotos > 0) {
+                  return (
+                    <div className="mt-4">
+                      <p className="text-xs text-white/60 mb-2">
+                        Total: {totalPhotos} photo(s) {photoFiles.length > 0 && `(${photoFiles.length} will be uploaded)`}
+                      </p>
+                      {photoUrls.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {photoUrls.map((url, index) => (
+                            <div key={`url-${index}`} className="relative group">
+                              <img
+                                src={url}
+                                alt={`Photo ${index + 1}`}
+                                className="w-full h-24 object-cover rounded-lg border border-white/10"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ccc' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3EInvalid URL%3C/text%3E%3C/svg%3E"
+                                }}
+                              />
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors"
+                              >
+                                <ExternalLink className="h-4 w-4 text-white opacity-0 group-hover:opacity-100" />
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                  
-                  {/* New Photo Files */}
-                  {photoFiles.map((file, index) => (
-                    <div key={`file-${index}`} className="relative group">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg border border-white/10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removePhotoFile(index)}
-                        className="absolute top-1 right-1 p-1 rounded-full bg-red-500/80 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        disabled={uploadingPhotos || saving}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      <div className="absolute bottom-1 left-1 right-1">
-                        <p className="text-[10px] text-white/80 bg-black/60 rounded px-1 truncate">
-                          {file.name}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                  )
+                }
+                return null
+              })()}
+              
+              {/* Cloudinary Setup Info */}
+              {(!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || !process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) && (
+                <div className="mt-4 p-3 rounded-lg border border-orange-500/30 bg-orange-500/10">
+                  <p className="text-xs text-orange-300 mb-2 font-semibold">⚠️ Cloudinary Not Configured</p>
+                  <p className="text-xs text-orange-200/80 mb-2">
+                    To enable direct photo uploads, please set up Cloudinary:
+                  </p>
+                  <ol className="text-xs text-orange-200/70 space-y-1 list-decimal list-inside ml-2">
+                    <li>Create a free account at <a href="https://cloudinary.com" target="_blank" rel="noopener noreferrer" className="text-orange-300 hover:text-orange-200 underline">cloudinary.com</a></li>
+                    <li>Create an unsigned upload preset</li>
+                    <li>Add environment variables (see CLOUDINARY_SETUP.md)</li>
+                  </ol>
+                  <p className="text-xs text-orange-200/70 mt-2">
+                    Until then, you can still use the URL input method above.
+                  </p>
                 </div>
-              </div>
-            )}
-
-            {/* URL Input (Fallback) */}
-            <details className="mt-3">
-              <summary className="text-xs text-white/60 cursor-pointer hover:text-white/80">
-                Or enter photo URLs manually (one per line)
-              </summary>
-              <Textarea
-                value={draft.photos}
-                onChange={(event) => setDraft((prev) => ({ ...prev, photos: event.target.value }))}
-                placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg"
-                className="mt-2 min-h-[80px] bg-white/10 text-white placeholder:text-white/40"
-                rows={3}
-              />
-            </details>
+              )}
             </div>
           )}
 
@@ -1249,6 +1322,34 @@ function ListingsPanel({
                 placeholder="Enter additional information..."
                 className="min-h-[100px] bg-white/10 text-white placeholder:text-white/40 w-full"
               />
+              
+              {/* Location Link Field */}
+              <div className="mt-4">
+                <label className="block text-xs text-white/60 mb-2">Location Link (Google Maps / Maps)</label>
+                <p className="text-xs text-white/40 mb-2">
+                  Enter the Google Maps or Apple Maps link. This will be displayed in orange on the frontend.
+                </p>
+                <Input
+                  value={draft.locationLink}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, locationLink: event.target.value }))}
+                  placeholder="https://maps.google.com/... or https://maps.apple.com/..."
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                  disabled={saving}
+                />
+                {draft.locationLink && (
+                  <div className="mt-2">
+                    <a
+                      href={draft.locationLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-xs font-semibold text-orange-500 hover:text-orange-400"
+                    >
+                      Preview Location Link
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
                 <Input
                   type="number"
@@ -1346,7 +1447,7 @@ function ListingsPanel({
               {uploadingPhotos ? "Uploading photos..." : saving ? "Saving..." : editingId ? "Update listing" : "Add listing"}
             </Button>
             {editingId && (
-              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft} disabled={saving || uploadingPhotos}>
+              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft} disabled={saving}>
                 Cancel
               </Button>
             )}
