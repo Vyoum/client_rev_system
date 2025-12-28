@@ -7,11 +7,13 @@ import SignInModal from "./sign-in-modal"
 import { collection, query, onSnapshot, Timestamp, addDoc, serverTimestamp, where, orderBy } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 
-const tabs = ["Feed", "School", "Colleges", "Kindergarden", "Courses"]
+const tabs = ["Feed", "Colleges", "School", "Kindergarden", "Courses"]
 const detailTabs = [
-  { id: "about", label: "About" },
+  { id: "whatsnew", label: "What's New" },
   { id: "reviews", label: "Reviews" },
+  { id: "about", label: "About" },
   { id: "photos", label: "Photos" },
+  { id: "others", label: "Others" },
 ] as const
 
 type ListingItem = {
@@ -463,13 +465,13 @@ export default function SearchCommunityPage() {
   return (
     <div className="min-h-screen bg-white text-[#111827] flex flex-col">
       {/* Header */}
-      <header className="relative flex items-center justify-center px-4 sm:px-5 pt-8 pb-4 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full">
+      <header className="relative flex items-center justify-center px-4 sm:px-5 pt-8 pb-6 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full">
         {selectedListing ? (
           <>
             <button
               type="button"
               onClick={handleCloseListing}
-              className="absolute left-2 top-8 flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] transition-colors"
+              className="absolute left-2 top-8 flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] transition-colors z-10"
               aria-label="Back to results"
             >
               <ChevronLeft className="h-5 w-5 text-[#111827]" />
@@ -477,7 +479,7 @@ export default function SearchCommunityPage() {
             <button
               type="button"
               onClick={() => setIsSignInOpen(true)}
-              className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors"
+              className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors z-10"
               aria-label="Open profile"
             >
               <User className="h-6 w-6 text-[#111827]" />
@@ -485,11 +487,10 @@ export default function SearchCommunityPage() {
           </>
         ) : (
           <>
-            <h1 className="text-2xl font-semibold">Search</h1>
             <button
               type="button"
               onClick={() => setIsSignInOpen(true)}
-              className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors"
+              className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors z-10"
               aria-label="Open profile"
             >
               <User className="h-6 w-6 text-[#111827]" />
@@ -552,7 +553,17 @@ export default function SearchCommunityPage() {
             </div>
           </nav>
 
-          {detailTab === "about" ? (
+          {detailTab === "whatsnew" ? (
+            <div className="mt-5 space-y-4">
+              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-6">
+                <h3 className="text-lg font-semibold text-[#111827] mb-4">What's New</h3>
+                <div className="space-y-3 text-sm text-[#4B5563]">
+                  <p>Stay updated with the latest news and updates about this listing.</p>
+                  <p className="text-[#6B7280]">Recent updates and announcements will appear here.</p>
+                </div>
+              </div>
+            </div>
+          ) : detailTab === "about" ? (
             <div className="mt-5 space-y-4">
               {selectedListing.website && (
                 <a
@@ -687,6 +698,16 @@ export default function SearchCommunityPage() {
                 )}
               </div>
             </div>
+          ) : detailTab === "others" ? (
+            <div className="mt-5 space-y-4">
+              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-6">
+                <h3 className="text-lg font-semibold text-[#111827] mb-4">Additional Information</h3>
+                <div className="space-y-3 text-sm text-[#4B5563]">
+                  <p>This section contains additional information and details about this listing.</p>
+                  <p className="text-[#6B7280]">More details will be added here in the future.</p>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="mt-5">
               {selectedListing.photos && selectedListing.photos.length > 0 ? (
@@ -729,7 +750,7 @@ export default function SearchCommunityPage() {
       ) : (
         <>
       {/* Search Container - Centered on desktop */}
-      <div className="px-4 sm:px-5 mt-2 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full">
+      <div className="px-4 sm:px-5 mt-4 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full">
         {/* Search Inputs */}
         <div className="space-y-3">
           <div className="flex flex-col gap-3">

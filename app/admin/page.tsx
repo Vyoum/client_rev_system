@@ -60,8 +60,8 @@ type UserRecord = {
 const tabs = [
   { id: "users", label: "Users" },
   { id: "schools", label: "Feed" },
-  { id: "colleges", label: "School" },
   { id: "jobs", label: "Colleges" },
+  { id: "colleges", label: "School" },
   { id: "companies", label: "Kindergarden" },
   { id: "courses", label: "Courses" },
   { id: "reviews", label: "Reviews" },
