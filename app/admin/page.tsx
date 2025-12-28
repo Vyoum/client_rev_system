@@ -21,6 +21,18 @@ type ListingItem = {
   description: string
   updatedAt: string
   createdAt?: Timestamp | string
+  rating?: number | null
+  jobsCount?: number | null
+  reviewsCount?: number | null
+  salariesCount?: number | null
+  locationsCount?: number | null
+  logoUrl?: string
+  website?: string
+  employeeCount?: string
+  type?: string
+  revenue?: string
+  founded?: string
+  industry?: string
 }
 
 type ReviewItem = {
@@ -44,10 +56,10 @@ type UserRecord = {
 
 const tabs = [
   { id: "users", label: "Users" },
-  { id: "schools", label: "Schools" },
-  { id: "colleges", label: "Colleges" },
-  { id: "jobs", label: "Jobs" },
-  { id: "companies", label: "Companies" },
+  { id: "schools", label: "Feed" },
+  { id: "colleges", label: "School" },
+  { id: "jobs", label: "Colleges" },
+  { id: "companies", label: "Kindergarden" },
   { id: "reviews", label: "Reviews" },
 ] as const
 
@@ -90,6 +102,12 @@ const formatTimestamp = (value: unknown) => {
     return value.toDate().toLocaleString()
   }
   return "—"
+}
+
+const parseOptionalNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export default function AdminPage() {
@@ -144,7 +162,7 @@ export default function AdminPage() {
 
   // Load schools
   useEffect(() => {
-    const schoolsRef = collection(db, "schools")
+    const schoolsRef = collection(db, "feed")
     const schoolsQuery = query(schoolsRef, orderBy("updatedAt", "desc"))
     const unsubscribe = onSnapshot(
       schoolsQuery,
@@ -161,13 +179,25 @@ export default function AdminPage() {
             description: data.description || "",
             updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
             createdAt: data.createdAt,
+            rating: parseOptionalNumber(data.rating),
+            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
+            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
+            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
+            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
+            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
+            website: typeof data.website === "string" ? data.website : "",
+            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
+            type: typeof data.type === "string" ? data.type : "",
+            revenue: typeof data.revenue === "string" ? data.revenue : "",
+            founded: data.founded != null ? String(data.founded) : "",
+            industry: typeof data.industry === "string" ? data.industry : "",
           }
         })
         setSchools(nextSchools)
         setSchoolsLoading(false)
       },
       (error) => {
-        console.error("Loading schools failed:", error)
+        console.error("Loading feed failed:", error)
         setSchools([])
         setSchoolsLoading(false)
       }
@@ -178,7 +208,7 @@ export default function AdminPage() {
 
   // Load colleges
   useEffect(() => {
-    const collegesRef = collection(db, "colleges")
+    const collegesRef = collection(db, "school")
     const collegesQuery = query(collegesRef, orderBy("updatedAt", "desc"))
     const unsubscribe = onSnapshot(
       collegesQuery,
@@ -195,13 +225,25 @@ export default function AdminPage() {
             description: data.description || "",
             updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
             createdAt: data.createdAt,
+            rating: parseOptionalNumber(data.rating),
+            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
+            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
+            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
+            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
+            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
+            website: typeof data.website === "string" ? data.website : "",
+            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
+            type: typeof data.type === "string" ? data.type : "",
+            revenue: typeof data.revenue === "string" ? data.revenue : "",
+            founded: data.founded != null ? String(data.founded) : "",
+            industry: typeof data.industry === "string" ? data.industry : "",
           }
         })
         setColleges(nextColleges)
         setCollegesLoading(false)
       },
       (error) => {
-        console.error("Loading colleges failed:", error)
+        console.error("Loading school failed:", error)
         setColleges([])
         setCollegesLoading(false)
       }
@@ -212,7 +254,7 @@ export default function AdminPage() {
 
   // Load jobs
   useEffect(() => {
-    const jobsRef = collection(db, "jobs")
+    const jobsRef = collection(db, "colleges")
     const jobsQuery = query(jobsRef, orderBy("updatedAt", "desc"))
     const unsubscribe = onSnapshot(
       jobsQuery,
@@ -229,13 +271,25 @@ export default function AdminPage() {
             description: data.description || "",
             updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
             createdAt: data.createdAt,
+            rating: parseOptionalNumber(data.rating),
+            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
+            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
+            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
+            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
+            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
+            website: typeof data.website === "string" ? data.website : "",
+            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
+            type: typeof data.type === "string" ? data.type : "",
+            revenue: typeof data.revenue === "string" ? data.revenue : "",
+            founded: data.founded != null ? String(data.founded) : "",
+            industry: typeof data.industry === "string" ? data.industry : "",
           }
         })
         setJobs(nextJobs)
         setJobsLoading(false)
       },
       (error) => {
-        console.error("Loading jobs failed:", error)
+        console.error("Loading colleges failed:", error)
         setJobs([])
         setJobsLoading(false)
       }
@@ -246,7 +300,7 @@ export default function AdminPage() {
 
   // Load companies
   useEffect(() => {
-    const companiesRef = collection(db, "companies")
+    const companiesRef = collection(db, "kindergarden")
     const companiesQuery = query(companiesRef, orderBy("updatedAt", "desc"))
     const unsubscribe = onSnapshot(
       companiesQuery,
@@ -263,13 +317,25 @@ export default function AdminPage() {
             description: data.description || "",
             updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
             createdAt: data.createdAt,
+            rating: parseOptionalNumber(data.rating),
+            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
+            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
+            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
+            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
+            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
+            website: typeof data.website === "string" ? data.website : "",
+            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
+            type: typeof data.type === "string" ? data.type : "",
+            revenue: typeof data.revenue === "string" ? data.revenue : "",
+            founded: data.founded != null ? String(data.founded) : "",
+            industry: typeof data.industry === "string" ? data.industry : "",
           }
         })
         setCompanies(nextCompanies)
         setCompaniesLoading(false)
       },
       (error) => {
-        console.error("Loading companies failed:", error)
+        console.error("Loading kindergarden failed:", error)
         setCompanies([])
         setCompaniesLoading(false)
       }
@@ -299,10 +365,10 @@ export default function AdminPage() {
   const hiddenReviews = reviews.filter((review) => review.status === "Hidden").length
 
   const listingConfigMap: Record<ListingTabId, { label: string; items: ListingItem[]; setItems: Dispatch<SetStateAction<ListingItem[]>>; collectionName: string; loading: boolean }> = {
-    schools: { label: "School", items: schools, setItems: setSchools, collectionName: "schools", loading: schoolsLoading },
-    colleges: { label: "College", items: colleges, setItems: setColleges, collectionName: "colleges", loading: collegesLoading },
-    jobs: { label: "Job", items: jobs, setItems: setJobs, collectionName: "jobs", loading: jobsLoading },
-    companies: { label: "Company", items: companies, setItems: setCompanies, collectionName: "companies", loading: companiesLoading },
+    schools: { label: "Feed", items: schools, setItems: setSchools, collectionName: "feed", loading: schoolsLoading },
+    colleges: { label: "School", items: colleges, setItems: setColleges, collectionName: "school", loading: collegesLoading },
+    jobs: { label: "Colleges", items: jobs, setItems: setJobs, collectionName: "colleges", loading: jobsLoading },
+    companies: { label: "Kindergarden", items: companies, setItems: setCompanies, collectionName: "kindergarden", loading: companiesLoading },
   }
 
   const activeListingConfig =
@@ -449,8 +515,20 @@ function ListingsPanel({
     location: "",
     state: "",
     city: "",
-    status: "Draft" as ListingStatus,
+    status: "Published" as ListingStatus,
     description: "",
+    rating: "",
+    jobsCount: "",
+    reviewsCount: "",
+    salariesCount: "",
+    locationsCount: "",
+    logoUrl: "",
+    website: "",
+    employeeCount: "",
+    type: "",
+    revenue: "",
+    founded: "",
+    industry: "",
   })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState("")
@@ -466,7 +544,26 @@ function ListingsPanel({
   }, [filterQuery, items])
 
   const resetDraft = () => {
-    setDraft({ name: "", location: "", state: "", city: "", status: "Draft", description: "" })
+    setDraft({
+      name: "",
+      location: "",
+      state: "",
+      city: "",
+      status: "Published",
+      description: "",
+      rating: "",
+      jobsCount: "",
+      reviewsCount: "",
+      salariesCount: "",
+      locationsCount: "",
+      logoUrl: "",
+      website: "",
+      employeeCount: "",
+      type: "",
+      revenue: "",
+      founded: "",
+      industry: "",
+    })
     setEditingId(null)
     setFormError(null)
   }
@@ -491,16 +588,33 @@ function ListingsPanel({
     setFormError(null)
 
     try {
-      const locationData = parseLocation(draft.location.trim())
-      const listingData = {
+      const locationValue = draft.location.trim()
+      const locationData = parseLocation(locationValue)
+      const cityValue = draft.city.trim() || locationData.city
+      const stateValue = draft.state.trim() || locationData.state
+      const resolvedLocation = locationValue || [cityValue, stateValue].filter(Boolean).join(", ")
+      const listingData: Record<string, unknown> = {
         name: trimmedName,
-        location: draft.location.trim(),
-        state: draft.state || locationData.state,
-        city: draft.city || locationData.city,
+        location: resolvedLocation,
+        state: stateValue,
+        city: cityValue,
         status: draft.status,
         description: draft.description.trim(),
         updatedAt: serverTimestamp(),
       }
+
+      listingData.rating = parseOptionalNumber(draft.rating)
+      listingData.jobsCount = parseOptionalNumber(draft.jobsCount)
+      listingData.reviewsCount = parseOptionalNumber(draft.reviewsCount)
+      listingData.salariesCount = parseOptionalNumber(draft.salariesCount)
+      listingData.locationsCount = parseOptionalNumber(draft.locationsCount)
+      listingData.logoUrl = draft.logoUrl.trim()
+      listingData.website = draft.website.trim()
+      listingData.employeeCount = draft.employeeCount.trim()
+      listingData.type = draft.type.trim()
+      listingData.revenue = draft.revenue.trim()
+      listingData.founded = draft.founded.trim()
+      listingData.industry = draft.industry.trim()
 
       if (editingId) {
         // Update existing listing
@@ -524,13 +638,26 @@ function ListingsPanel({
   }
 
   const handleEdit = (item: ListingItem) => {
+    const fallbackLocation = item.location || [item.city, item.state].filter(Boolean).join(", ")
     setDraft({
       name: item.name,
-      location: item.location,
+      location: fallbackLocation,
       state: item.state || "",
       city: item.city || "",
       status: item.status,
       description: item.description,
+      rating: item.rating != null ? String(item.rating) : "",
+      jobsCount: item.jobsCount != null ? String(item.jobsCount) : "",
+      reviewsCount: item.reviewsCount != null ? String(item.reviewsCount) : "",
+      salariesCount: item.salariesCount != null ? String(item.salariesCount) : "",
+      locationsCount: item.locationsCount != null ? String(item.locationsCount) : "",
+      logoUrl: item.logoUrl || "",
+      website: item.website || "",
+      employeeCount: item.employeeCount || "",
+      type: item.type || "",
+      revenue: item.revenue || "",
+      founded: item.founded || "",
+      industry: item.industry || "",
     })
     setEditingId(item.id)
     setFormError(null)
@@ -612,6 +739,7 @@ function ListingsPanel({
       <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
         <h3 className="text-lg font-semibold">{editingId ? `Edit ${label}` : `Add ${label}`}</h3>
         <p className="text-sm text-white/60">Fill in the details and save.</p>
+        <p className="text-xs text-white/40">Firestore collection: {collectionName}</p>
 
         <div className="mt-4 space-y-3">
           <Input
@@ -620,12 +748,122 @@ function ListingsPanel({
             placeholder={`${label} name`}
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={draft.location}
+              onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))}
+              placeholder="Location (City, State)"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+            <Input
+              value={draft.state}
+              onChange={(event) => setDraft((prev) => ({ ...prev, state: event.target.value }))}
+              placeholder="State"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={draft.city}
+              onChange={(event) => setDraft((prev) => ({ ...prev, city: event.target.value }))}
+              placeholder="City"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+            <Input
+              value={draft.website}
+              onChange={(event) => setDraft((prev) => ({ ...prev, website: event.target.value }))}
+              placeholder="Website"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+          </div>
           <Input
-            value={draft.location}
-            onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))}
-            placeholder="Location"
+            value={draft.logoUrl}
+            onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
+            placeholder="Logo URL"
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              type="number"
+              min="0"
+              max="5"
+              step="0.1"
+              value={draft.rating}
+              onChange={(event) => setDraft((prev) => ({ ...prev, rating: event.target.value }))}
+              placeholder="Rating (0-5)"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+            <Input
+              type="number"
+              min="0"
+              value={draft.jobsCount}
+              onChange={(event) => setDraft((prev) => ({ ...prev, jobsCount: event.target.value }))}
+              placeholder="Jobs count"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              type="number"
+              min="0"
+              value={draft.reviewsCount}
+              onChange={(event) => setDraft((prev) => ({ ...prev, reviewsCount: event.target.value }))}
+              placeholder="Reviews count"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+            <Input
+              type="number"
+              min="0"
+              value={draft.salariesCount}
+              onChange={(event) => setDraft((prev) => ({ ...prev, salariesCount: event.target.value }))}
+              placeholder="Salaries count"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              type="number"
+              min="0"
+              value={draft.locationsCount}
+              onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
+              placeholder="Locations count"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+            <Input
+              value={draft.employeeCount}
+              onChange={(event) => setDraft((prev) => ({ ...prev, employeeCount: event.target.value }))}
+              placeholder="Employee count"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={draft.type}
+              onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
+              placeholder="Type (e.g., Public)"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+            <Input
+              value={draft.revenue}
+              onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
+              placeholder="Revenue"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={draft.founded}
+              onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
+              placeholder="Founded year"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+            <Input
+              value={draft.industry}
+              onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
+              placeholder="Industry"
+              className="h-10 bg-white/10 text-white placeholder:text-white/40"
+            />
+          </div>
           <select
             value={draft.status}
             onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as ListingStatus }))}
@@ -637,7 +875,7 @@ function ListingsPanel({
           <Textarea
             value={draft.description}
             onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-            placeholder="Short description"
+            placeholder="About"
             className="min-h-[110px] bg-white/10 text-white placeholder:text-white/40"
           />
 
