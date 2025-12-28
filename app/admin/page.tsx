@@ -7,7 +7,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { db, storage } from "@/lib/firebase"
+import { db, storage, auth } from "@/lib/firebase"
 import { X, Upload, Image as ImageIcon } from "lucide-react"
 
 type ListingStatus = "Draft" | "Published"
@@ -649,11 +649,17 @@ function ListingsPanel({
   }
 
   const uploadPhoto = async (file: File, listingId: string): Promise<string> => {
-    const fileExtension = file.name.split(".").pop() || "jpg"
-    const fileName = `${listingId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`
-    const storageRef = ref(storage, `listings/${collectionName}/${fileName}`)
-    const snapshot = await uploadBytes(storageRef, file)
-    return await getDownloadURL(snapshot.ref)
+    try {
+      const fileExtension = file.name.split(".").pop() || "jpg"
+      const fileName = `${listingId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`
+      const storageRef = ref(storage, `listings/${collectionName}/${fileName}`)
+      const snapshot = await uploadBytes(storageRef, file)
+      const downloadURL = await getDownloadURL(snapshot.ref)
+      return downloadURL
+    } catch (error: any) {
+      console.error("Error uploading photo:", file.name, error)
+      throw new Error(`Failed to upload ${file.name}: ${error?.message || "Unknown error"}`)
+    }
   }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -753,28 +759,8 @@ function ListingsPanel({
       const industry = draft.industry.trim()
       if (industry) listingData.industry = industry
       
-      // Upload photos first if there are any
-      let photoUrls: string[] = [...existingPhotoUrls]
-      
-      if (photoFiles.length > 0) {
-        setUploadingPhotos(true)
-        try {
-          // If editing, use existing ID, otherwise we'll need to create the listing first
-          const tempId = editingId || `temp_${Date.now()}`
-          const uploadPromises = photoFiles.map((file) => uploadPhoto(file, tempId))
-          const uploadedUrls = await Promise.all(uploadPromises)
-          photoUrls = [...photoUrls, ...uploadedUrls]
-        } catch (error) {
-          console.error("Error uploading photos:", error)
-          setFormError("Failed to upload some photos. Please try again.")
-          setUploadingPhotos(false)
-          setSaving(false)
-          return
-        }
-        setUploadingPhotos(false)
-      }
-      
       // Also parse photos from textarea (for backward compatibility)
+      let photoUrls: string[] = [...existingPhotoUrls]
       const photosText = draft.photos.trim()
       if (photosText) {
         const photosArray = photosText
@@ -784,37 +770,85 @@ function ListingsPanel({
         photoUrls = [...photoUrls, ...photosArray]
       }
 
-      // Add photos to listing data
-      if (photoUrls.length > 0) {
-        listingData.photos = photoUrls
-      }
-
-      console.log("Saving to collection:", collectionName)
-      console.log("Listing data:", listingData)
-
+      // Get or create listing ID first
+      let listingId: string
       if (editingId) {
-        // Update existing listing
-        const listingRef = doc(db, collectionName, editingId)
+        listingId = editingId
+        // Update existing listing first (without photos)
+        const listingRef = doc(db, collectionName, listingId)
         await updateDoc(listingRef, listingData)
       } else {
-        // Create new listing
+        // Create new listing first to get the ID
         const docRef = await addDoc(collection(db, collectionName), {
           ...listingData,
           createdAt: serverTimestamp(),
         })
-        
-        // If we uploaded photos with temp ID, we should re-upload them with the real ID
-        // For now, we'll keep them as is since the path includes the temp ID
-        // In production, you might want to move them to the correct path
+        listingId = docRef.id
       }
+
+      // Upload photos after we have the listing ID
+      if (photoFiles.length > 0) {
+        // Check if user is authenticated
+        if (!auth.currentUser) {
+          setFormError("You must be signed in to upload photos. Please sign in and try again.")
+          setSaving(false)
+          return
+        }
+
+        setUploadingPhotos(true)
+        try {
+          console.log(`Uploading ${photoFiles.length} photo(s)...`)
+          const uploadPromises = photoFiles.map((file, index) => {
+            console.log(`Uploading photo ${index + 1}/${photoFiles.length}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`)
+            return uploadPhoto(file, listingId)
+          })
+          const uploadedUrls = await Promise.all(uploadPromises)
+          console.log("All photos uploaded successfully:", uploadedUrls)
+          photoUrls = [...photoUrls, ...uploadedUrls]
+          
+          // Update listing with photo URLs
+          const listingRef = doc(db, collectionName, listingId)
+          await updateDoc(listingRef, { photos: photoUrls })
+          console.log("Listing updated with photo URLs")
+        } catch (error: any) {
+          console.error("Error uploading photos:", error)
+          let errorMessage = error?.message || "Unknown error occurred"
+          
+          // Provide more helpful error messages
+          if (error?.code === "storage/unauthorized") {
+            errorMessage = "Storage permission denied. Please check Firebase Storage rules."
+          } else if (error?.code === "storage/canceled") {
+            errorMessage = "Upload was canceled."
+          } else if (error?.code === "storage/unknown") {
+            errorMessage = "Unknown storage error. Please check your Firebase configuration."
+          }
+          
+          setFormError(`Failed to upload photos: ${errorMessage}. Check console for details.`)
+          setUploadingPhotos(false)
+          setSaving(false)
+          return
+        } finally {
+          // Always reset upload state
+          setUploadingPhotos(false)
+        }
+      } else if (photoUrls.length > 0) {
+        // If we have photo URLs but no new files, just update the photos field
+        const listingRef = doc(db, collectionName, listingId)
+        await updateDoc(listingRef, { photos: photoUrls })
+      }
+
+      console.log("Saving to collection:", collectionName)
+      console.log("Listing data:", listingData)
 
       resetDraft()
     } catch (error: any) {
       console.error("Error saving listing:", error)
       const errorMessage = error?.message || "Unknown error occurred"
       setFormError(`Failed to save listing: ${errorMessage}. Please check the console for details.`)
+      setUploadingPhotos(false) // Ensure upload state is reset on error
     } finally {
       setSaving(false)
+      setUploadingPhotos(false) // Ensure upload state is always reset
     }
   }
 
