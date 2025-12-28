@@ -1080,24 +1080,24 @@ export default function SearchCommunityPage() {
                         )}
 
                         <div className="flex-1">
-                          <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
+                            {displayRating !== null && (
+                              <span className="font-bold text-[#111827] text-base">
+                                {displayRating.toFixed(1)}★
+                              </span>
+                            )}
+                          </div>
                           <p className="mt-1 text-sm text-[#6B7280]">
-                            {displayRating !== null ? (
+                            {reviewCount > 0 && (
                               <>
-                                <span className="font-bold text-[#111827]">
-                                  {displayRating.toFixed(1)}★
-                                  {reviewCount > 0 ? ` ${formatCount(reviewCount)} reviews` : ""}
-                                </span>
+                                <span>{formatCount(reviewCount)} reviews</span>
                                 {statsParts.length > 0 && " · "}
                               </>
-                            ) : reviewCount > 0 ? (
-                              <>
-                                <span className="text-[#6B7280]">{formatCount(reviewCount)} reviews</span>
-                                {statsParts.length > 0 && " · "}
-                              </>
-                            ) : null}
+                            )}
                             {statsParts.length > 0 && statsParts.join(" · ")}
-                            {!displayRating && statsParts.length === 0 && locationDisplay}
+                            {(reviewCount > 0 || statsParts.length > 0) && locationDisplay && " · "}
+                            {locationDisplay}
                           </p>
                           {showDescription && (
                             <p className="mt-1 text-sm text-[#4B5563] line-clamp-2">{listing.description}</p>
