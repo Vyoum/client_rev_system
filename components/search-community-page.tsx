@@ -11,6 +11,7 @@ const tabs = ["Feed", "School", "Colleges", "Kindergarden"]
 const detailTabs = [
   { id: "about", label: "About" },
   { id: "reviews", label: "Reviews" },
+  { id: "photos", label: "Photos" },
 ] as const
 
 type ListingItem = {
@@ -34,6 +35,7 @@ type ListingItem = {
   founded?: string
   industry?: string
   locationsCount?: number | null
+  photos?: string[]
 }
 
 type ReviewItem = {
@@ -162,35 +164,103 @@ export default function SearchCommunityPage() {
 
     setReviewsLoading(true)
     const reviewsRef = collection(db, "reviews")
-    const reviewsQuery = query(
-      reviewsRef,
-      where("listingId", "==", selectedListing.id),
-      orderBy("createdAt", "desc")
-    )
+    
+    // Try with orderBy first, fallback to simple query if index is missing
+    let reviewsQuery
+    try {
+      reviewsQuery = query(
+        reviewsRef,
+        where("listingId", "==", selectedListing.id),
+        orderBy("createdAt", "desc")
+      )
+    } catch (error) {
+      // If orderBy fails, use simple query
+      reviewsQuery = query(reviewsRef, where("listingId", "==", selectedListing.id))
+    }
 
     const unsubscribe = onSnapshot(
       reviewsQuery,
       (snapshot) => {
-        const nextReviews = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            listingId: data.listingId || "",
-            authorName: data.authorName || "Anonymous",
-            authorId: data.authorId || "",
-            rating: data.rating || 0,
-            message: data.message || "",
-            createdAt: data.createdAt || serverTimestamp(),
-            updatedAt: data.updatedAt,
-          }
-        })
+        const nextReviews = snapshot.docs
+          .map((doc) => {
+            const data = doc.data()
+            return {
+              id: doc.id,
+              listingId: data.listingId || "",
+              authorName: data.authorName || "Anonymous",
+              authorId: data.authorId || "",
+              rating: data.rating || 0,
+              message: data.message || "",
+              createdAt: data.createdAt || serverTimestamp(),
+              updatedAt: data.updatedAt,
+            }
+          })
+          .sort((a, b) => {
+            // Client-side sort by createdAt (newest first)
+            const aTime = a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
+              ? a.createdAt.toDate().getTime()
+              : typeof a.createdAt === "string"
+              ? new Date(a.createdAt).getTime()
+              : 0
+            const bTime = b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
+              ? b.createdAt.toDate().getTime()
+              : typeof b.createdAt === "string"
+              ? new Date(b.createdAt).getTime()
+              : 0
+            return bTime - aTime
+          })
         setReviews(nextReviews)
         setReviewsLoading(false)
       },
       (error) => {
         console.error("Error loading reviews:", error)
-        setReviews([])
-        setReviewsLoading(false)
+        // If query with orderBy fails, try without orderBy
+        if (error.code === "failed-precondition") {
+          const fallbackQuery = query(reviewsRef, where("listingId", "==", selectedListing.id))
+          const fallbackUnsubscribe = onSnapshot(
+            fallbackQuery,
+            (snapshot) => {
+              const nextReviews = snapshot.docs
+                .map((doc) => {
+                  const data = doc.data()
+                  return {
+                    id: doc.id,
+                    listingId: data.listingId || "",
+                    authorName: data.authorName || "Anonymous",
+                    authorId: data.authorId || "",
+                    rating: data.rating || 0,
+                    message: data.message || "",
+                    createdAt: data.createdAt || serverTimestamp(),
+                    updatedAt: data.updatedAt,
+                  }
+                })
+                .sort((a, b) => {
+                  const aTime = a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
+                    ? a.createdAt.toDate().getTime()
+                    : typeof a.createdAt === "string"
+                    ? new Date(a.createdAt).getTime()
+                    : 0
+                  const bTime = b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
+                    ? b.createdAt.toDate().getTime()
+                    : typeof b.createdAt === "string"
+                    ? new Date(b.createdAt).getTime()
+                    : 0
+                  return bTime - aTime
+                })
+              setReviews(nextReviews)
+              setReviewsLoading(false)
+            },
+            (fallbackError) => {
+              console.error("Error loading reviews (fallback):", fallbackError)
+              setReviews([])
+              setReviewsLoading(false)
+            }
+          )
+          return () => fallbackUnsubscribe()
+        } else {
+          setReviews([])
+          setReviewsLoading(false)
+        }
       }
     )
 
@@ -212,15 +282,22 @@ export default function SearchCommunityPage() {
       return
     }
 
+    // Check if user is signed in, if not prompt them
+    const currentUser = auth.currentUser
+    if (!currentUser) {
+      setReviewError("Please sign in to submit a review.")
+      setIsSignInOpen(true)
+      return
+    }
+
     setIsSubmittingReview(true)
     setReviewError(null)
 
     try {
-      const currentUser = auth.currentUser
       const reviewData = {
         listingId: selectedListing.id,
-        authorName: currentUser?.displayName || "Anonymous",
-        authorId: currentUser?.uid || "",
+        authorName: currentUser.displayName || currentUser.email?.split("@")[0] || "Anonymous",
+        authorId: currentUser.uid,
         rating: reviewForm.rating,
         message: trimmedMessage,
         createdAt: serverTimestamp(),
@@ -310,6 +387,7 @@ export default function SearchCommunityPage() {
               founded: data.founded != null ? String(data.founded) : "",
               industry: typeof data.industry === "string" ? data.industry : "",
               locationsCount: parseNumber(data.locationsCount ?? data.locations),
+              photos: Array.isArray(data.photos) ? data.photos.filter((url): url is string => typeof url === "string" && url.trim() !== "") : [],
             }
           })
           .filter((listing) => listing.status === "Published") // Filter published listings client-side
@@ -466,7 +544,7 @@ export default function SearchCommunityPage() {
                 >
                   {tab.label}
                   {detailTab === tab.id && (
-                    <div className="absolute left-0 right-0 -bottom-px h-1 bg-[#0CAA41]" />
+                    <div className="absolute left-0 right-0 -bottom-px h-1 bg-orange-500" />
                   )}
                 </button>
               ))}
@@ -480,7 +558,7 @@ export default function SearchCommunityPage() {
                   href={normalizeUrl(selectedListing.website)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#0CAA41] hover:text-[#0B8A35]"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-orange-500 hover:text-orange-600"
                 >
                   {selectedListing.website}
                   <ExternalLink className="h-4 w-4" />
@@ -501,20 +579,149 @@ export default function SearchCommunityPage() {
                 <p className="text-sm text-[#4B5563]">{selectedListing.description}</p>
               )}
             </div>
+          ) : detailTab === "reviews" ? (
+            <div className="mt-5 space-y-6">
+              {/* Review Form */}
+              <form onSubmit={handleSubmitReview} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-[#111827] mb-2">
+                    Your Rating
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setReviewForm((prev) => ({ ...prev, rating: star }))}
+                        className={`transition-transform hover:scale-110 ${
+                          star <= reviewForm.rating ? "text-yellow-400" : "text-gray-300"
+                        }`}
+                      >
+                        <svg className="h-6 w-6" viewBox="0 0 24 24" fill={star <= reviewForm.rating ? "currentColor" : "none"} stroke="currentColor" strokeWidth={star <= reviewForm.rating ? 0 : 1.5}>
+                          <path d="M12 17.27l5.18 3.04-1.4-5.95L20.5 9.5l-6.12-.52L12 3.5 9.62 8.98 3.5 9.5l4.72 4.86-1.4 5.95z" />
+                        </svg>
+                      </button>
+                    ))}
+                    <span className="ml-2 text-sm text-[#6B7280]">{reviewForm.rating}/5</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="review-message" className="block text-sm font-semibold text-[#111827] mb-2">
+                    Your Review
+                  </label>
+                  <textarea
+                    id="review-message"
+                    value={reviewForm.message}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, message: e.target.value }))}
+                    placeholder="Share your experience..."
+                    rows={4}
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#111827] placeholder-[#9CA3AF] focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                  />
+                </div>
+
+                {reviewError && (
+                  <p className="text-sm text-red-600">{reviewError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingReview}
+                  className="w-full rounded-full bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmittingReview ? "Submitting..." : "Submit Review"}
+                </button>
+              </form>
+
+              {/* Existing Reviews */}
+              <div className="border-t border-[#E5E7EB] pt-6">
+                <h3 className="text-lg font-semibold text-[#111827] mb-4">
+                  {reviewsLoading ? (
+                    "Loading reviews..."
+                  ) : reviews.length === 0 ? (
+                    "No reviews yet"
+                  ) : (
+                    `${reviews.length} ${reviews.length === 1 ? "Review" : "Reviews"}`
+                  )}
+                </h3>
+
+                {reviewsLoading ? (
+                  <p className="text-sm text-[#6B7280]">Loading reviews...</p>
+                ) : reviews.length === 0 ? (
+                  <p className="text-sm text-[#6B7280]">Be the first to review this listing!</p>
+                ) : (
+                  <div className="space-y-4">
+                    {reviews.map((review) => (
+                      <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
+                              {review.authorName.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-[#111827]">{review.authorName}</p>
+                              <p className="text-xs text-[#6B7280]">
+                                {(() => {
+                                  if (!review.createdAt) return "Recently"
+                                  if (typeof review.createdAt === "string") {
+                                    return new Date(review.createdAt).toLocaleDateString()
+                                  }
+                                  if (review.createdAt && typeof review.createdAt === "object" && "toDate" in review.createdAt) {
+                                    return review.createdAt.toDate().toLocaleDateString()
+                                  }
+                                  return "Recently"
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-semibold text-[#111827]">{review.rating}</span>
+                            <StarIcon />
+                          </div>
+                        </div>
+                        <p className="text-sm text-[#4B5563] whitespace-pre-wrap">{review.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
-            <div className="mt-5 space-y-4">
-              <p className="text-sm text-[#6B7280]">
-                {typeof selectedListing.reviewsCount === "number"
-                  ? `${formatCount(selectedListing.reviewsCount)} reviews`
-                  : "No reviews yet."}
-              </p>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-[#0CAA41] px-5 py-2 text-sm font-semibold text-[#0CAA41] hover:bg-[#0CAA41]/10 transition-colors"
-              >
-                Add review
-                <span className="text-lg leading-none">+</span>
-              </button>
+            <div className="mt-5">
+              {selectedListing.photos && selectedListing.photos.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {selectedListing.photos.map((photoUrl, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={photoUrl}
+                        alt={`${selectedListing.name} - Photo ${index + 1}`}
+                        className="w-full h-64 object-cover rounded-xl border border-[#E5E7EB] cursor-pointer transition-transform hover:scale-105"
+                        loading="lazy"
+                        onClick={() => window.open(photoUrl, "_blank")}
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-xl transition-colors pointer-events-none" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <svg
+                    className="h-16 w-16 text-[#D1D5DB] mb-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <p className="text-sm text-[#6B7280]">No photos available yet.</p>
+                  <p className="text-xs text-[#9CA3AF] mt-1">Photos will be added by the admin.</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -669,7 +876,7 @@ export default function SearchCommunityPage() {
               >
                 {tab}
                 {activeTab === tab && (
-                  <div className="absolute left-0 right-0 -bottom-px h-1 bg-[#0CAA41]" />
+                  <div className="absolute left-0 right-0 -bottom-px h-1 bg-orange-500" />
                 )}
               </button>
             ))}

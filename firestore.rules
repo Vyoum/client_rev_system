@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - allow read/write for authenticated users
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false; // Prevent deletion of user records
+    }
+    
+    // Listing collections (feed, school, colleges, kindergarden)
+    // Allow read for everyone (to view published listings)
+    // Allow write for authenticated users (admin operations)
+    match /feed/{listingId} {
+      allow read: if true; // Anyone can read
+      allow create: if request.auth != null; // Authenticated users can create
+      allow update: if request.auth != null; // Authenticated users can update
+      allow delete: if request.auth != null; // Authenticated users can delete
+    }
+    
+    match /school/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    match /colleges/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    match /kindergarden/{listingId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    // Reviews collection
+    match /reviews/{reviewId} {
+      allow read: if true; // Anyone can read reviews
+      allow create: if request.auth != null; // Only authenticated users can create reviews
+      allow update: if request.auth != null && request.resource.data.authorId == request.auth.uid; // Users can only update their own reviews
+      allow delete: if request.auth != null && resource.data.authorId == request.auth.uid; // Users can only delete their own reviews
+    }
+  }
+}
+

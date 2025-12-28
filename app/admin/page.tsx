@@ -3,10 +3,12 @@
 import type { Dispatch, SetStateAction } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { collection, onSnapshot, orderBy, query, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from "firebase/firestore"
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { db } from "@/lib/firebase"
+import { db, storage } from "@/lib/firebase"
+import { X, Upload, Image as ImageIcon } from "lucide-react"
 
 type ListingStatus = "Draft" | "Published"
 type ReviewStatus = "Visible" | "Hidden"
@@ -33,6 +35,7 @@ type ListingItem = {
   revenue?: string
   founded?: string
   industry?: string
+  photos?: string[]
 }
 
 type ReviewItem = {
@@ -110,6 +113,34 @@ const parseOptionalNumber = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+const mapListingData = (doc: any): ListingItem => {
+  const data = doc.data()
+  return {
+    id: doc.id,
+    name: data.name || "",
+    location: data.location || "",
+    state: data.state || "",
+    city: data.city || "",
+    status: (data.status || "Draft") as ListingStatus,
+    description: data.description || "",
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
+    createdAt: data.createdAt,
+    rating: parseOptionalNumber(data.rating),
+    jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
+    reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
+    salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
+    locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
+    logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
+    website: typeof data.website === "string" ? data.website : "",
+    employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
+    type: typeof data.type === "string" ? data.type : "",
+    revenue: typeof data.revenue === "string" ? data.revenue : "",
+    founded: data.founded != null ? String(data.founded) : "",
+    industry: typeof data.industry === "string" ? data.industry : "",
+    photos: Array.isArray(data.photos) ? data.photos.filter((url): url is string => typeof url === "string" && url.trim() !== "") : [],
+  }
+}
+
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>("users")
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -163,43 +194,55 @@ export default function AdminPage() {
   // Load schools
   useEffect(() => {
     const schoolsRef = collection(db, "feed")
-    const schoolsQuery = query(schoolsRef, orderBy("updatedAt", "desc"))
+    // Try with orderBy first, fallback to simple query if index is missing
+    let schoolsQuery
+    try {
+      schoolsQuery = query(schoolsRef, orderBy("updatedAt", "desc"))
+    } catch (error) {
+      schoolsQuery = query(schoolsRef)
+    }
+
     const unsubscribe = onSnapshot(
       schoolsQuery,
       (snapshot) => {
-        const nextSchools = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            name: data.name || "",
-            location: data.location || "",
-            state: data.state || "",
-            city: data.city || "",
-            status: (data.status || "Draft") as ListingStatus,
-            description: data.description || "",
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
-            createdAt: data.createdAt,
-            rating: parseOptionalNumber(data.rating),
-            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
-            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
-            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
-            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
-            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
-            website: typeof data.website === "string" ? data.website : "",
-            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
-            type: typeof data.type === "string" ? data.type : "",
-            revenue: typeof data.revenue === "string" ? data.revenue : "",
-            founded: data.founded != null ? String(data.founded) : "",
-            industry: typeof data.industry === "string" ? data.industry : "",
-          }
-        })
+        const nextSchools = snapshot.docs.map(mapListingData)
+          .sort((a, b) => {
+            // Client-side sort by updatedAt (newest first)
+            const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+            const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+            return bTime - aTime
+          })
         setSchools(nextSchools)
         setSchoolsLoading(false)
       },
       (error) => {
         console.error("Loading feed failed:", error)
-        setSchools([])
-        setSchoolsLoading(false)
+        // If orderBy fails, try without it
+        if (error.code === "failed-precondition") {
+          const fallbackQuery = query(schoolsRef)
+          const fallbackUnsubscribe = onSnapshot(
+            fallbackQuery,
+            (snapshot) => {
+              const nextSchools = snapshot.docs.map(mapListingData)
+                .sort((a, b) => {
+                  const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+                  const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+                  return bTime - aTime
+                })
+              setSchools(nextSchools)
+              setSchoolsLoading(false)
+            },
+            (fallbackError) => {
+              console.error("Loading feed failed (fallback):", fallbackError)
+              setSchools([])
+              setSchoolsLoading(false)
+            }
+          )
+          return () => fallbackUnsubscribe()
+        } else {
+          setSchools([])
+          setSchoolsLoading(false)
+        }
       }
     )
 
@@ -209,43 +252,50 @@ export default function AdminPage() {
   // Load colleges
   useEffect(() => {
     const collegesRef = collection(db, "school")
-    const collegesQuery = query(collegesRef, orderBy("updatedAt", "desc"))
+    let collegesQuery
+    try {
+      collegesQuery = query(collegesRef, orderBy("updatedAt", "desc"))
+    } catch (error) {
+      collegesQuery = query(collegesRef)
+    }
+
     const unsubscribe = onSnapshot(
       collegesQuery,
       (snapshot) => {
-        const nextColleges = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            name: data.name || "",
-            location: data.location || "",
-            state: data.state || "",
-            city: data.city || "",
-            status: (data.status || "Draft") as ListingStatus,
-            description: data.description || "",
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
-            createdAt: data.createdAt,
-            rating: parseOptionalNumber(data.rating),
-            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
-            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
-            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
-            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
-            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
-            website: typeof data.website === "string" ? data.website : "",
-            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
-            type: typeof data.type === "string" ? data.type : "",
-            revenue: typeof data.revenue === "string" ? data.revenue : "",
-            founded: data.founded != null ? String(data.founded) : "",
-            industry: typeof data.industry === "string" ? data.industry : "",
-          }
+        const nextColleges = snapshot.docs.map(mapListingData).sort((a, b) => {
+          const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+          const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+          return bTime - aTime
         })
         setColleges(nextColleges)
         setCollegesLoading(false)
       },
       (error) => {
         console.error("Loading school failed:", error)
-        setColleges([])
-        setCollegesLoading(false)
+        if (error.code === "failed-precondition") {
+          const fallbackQuery = query(collegesRef)
+          const fallbackUnsubscribe = onSnapshot(
+            fallbackQuery,
+            (snapshot) => {
+              const nextColleges = snapshot.docs.map(mapListingData).sort((a, b) => {
+                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+                return bTime - aTime
+              })
+              setColleges(nextColleges)
+              setCollegesLoading(false)
+            },
+            (fallbackError) => {
+              console.error("Loading school failed (fallback):", fallbackError)
+              setColleges([])
+              setCollegesLoading(false)
+            }
+          )
+          return () => fallbackUnsubscribe()
+        } else {
+          setColleges([])
+          setCollegesLoading(false)
+        }
       }
     )
 
@@ -255,43 +305,50 @@ export default function AdminPage() {
   // Load jobs
   useEffect(() => {
     const jobsRef = collection(db, "colleges")
-    const jobsQuery = query(jobsRef, orderBy("updatedAt", "desc"))
+    let jobsQuery
+    try {
+      jobsQuery = query(jobsRef, orderBy("updatedAt", "desc"))
+    } catch (error) {
+      jobsQuery = query(jobsRef)
+    }
+
     const unsubscribe = onSnapshot(
       jobsQuery,
       (snapshot) => {
-        const nextJobs = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            name: data.name || "",
-            location: data.location || "",
-            state: data.state || "",
-            city: data.city || "",
-            status: (data.status || "Draft") as ListingStatus,
-            description: data.description || "",
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
-            createdAt: data.createdAt,
-            rating: parseOptionalNumber(data.rating),
-            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
-            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
-            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
-            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
-            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
-            website: typeof data.website === "string" ? data.website : "",
-            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
-            type: typeof data.type === "string" ? data.type : "",
-            revenue: typeof data.revenue === "string" ? data.revenue : "",
-            founded: data.founded != null ? String(data.founded) : "",
-            industry: typeof data.industry === "string" ? data.industry : "",
-          }
+        const nextJobs = snapshot.docs.map(mapListingData).sort((a, b) => {
+          const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+          const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+          return bTime - aTime
         })
         setJobs(nextJobs)
         setJobsLoading(false)
       },
       (error) => {
         console.error("Loading colleges failed:", error)
-        setJobs([])
-        setJobsLoading(false)
+        if (error.code === "failed-precondition") {
+          const fallbackQuery = query(jobsRef)
+          const fallbackUnsubscribe = onSnapshot(
+            fallbackQuery,
+            (snapshot) => {
+              const nextJobs = snapshot.docs.map(mapListingData).sort((a, b) => {
+                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+                return bTime - aTime
+              })
+              setJobs(nextJobs)
+              setJobsLoading(false)
+            },
+            (fallbackError) => {
+              console.error("Loading colleges failed (fallback):", fallbackError)
+              setJobs([])
+              setJobsLoading(false)
+            }
+          )
+          return () => fallbackUnsubscribe()
+        } else {
+          setJobs([])
+          setJobsLoading(false)
+        }
       }
     )
 
@@ -301,43 +358,50 @@ export default function AdminPage() {
   // Load companies
   useEffect(() => {
     const companiesRef = collection(db, "kindergarden")
-    const companiesQuery = query(companiesRef, orderBy("updatedAt", "desc"))
+    let companiesQuery
+    try {
+      companiesQuery = query(companiesRef, orderBy("updatedAt", "desc"))
+    } catch (error) {
+      companiesQuery = query(companiesRef)
+    }
+
     const unsubscribe = onSnapshot(
       companiesQuery,
       (snapshot) => {
-        const nextCompanies = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            name: data.name || "",
-            location: data.location || "",
-            state: data.state || "",
-            city: data.city || "",
-            status: (data.status || "Draft") as ListingStatus,
-            description: data.description || "",
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
-            createdAt: data.createdAt,
-            rating: parseOptionalNumber(data.rating),
-            jobsCount: parseOptionalNumber(data.jobsCount ?? data.jobs),
-            reviewsCount: parseOptionalNumber(data.reviewsCount ?? data.reviews),
-            salariesCount: parseOptionalNumber(data.salariesCount ?? data.salaries),
-            locationsCount: parseOptionalNumber(data.locationsCount ?? data.locations),
-            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
-            website: typeof data.website === "string" ? data.website : "",
-            employeeCount: data.employeeCount != null ? String(data.employeeCount) : "",
-            type: typeof data.type === "string" ? data.type : "",
-            revenue: typeof data.revenue === "string" ? data.revenue : "",
-            founded: data.founded != null ? String(data.founded) : "",
-            industry: typeof data.industry === "string" ? data.industry : "",
-          }
+        const nextCompanies = snapshot.docs.map(mapListingData).sort((a, b) => {
+          const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+          const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+          return bTime - aTime
         })
         setCompanies(nextCompanies)
         setCompaniesLoading(false)
       },
       (error) => {
         console.error("Loading kindergarden failed:", error)
-        setCompanies([])
-        setCompaniesLoading(false)
+        if (error.code === "failed-precondition") {
+          const fallbackQuery = query(companiesRef)
+          const fallbackUnsubscribe = onSnapshot(
+            fallbackQuery,
+            (snapshot) => {
+              const nextCompanies = snapshot.docs.map(mapListingData).sort((a, b) => {
+                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+                return bTime - aTime
+              })
+              setCompanies(nextCompanies)
+              setCompaniesLoading(false)
+            },
+            (fallbackError) => {
+              console.error("Loading kindergarden failed (fallback):", fallbackError)
+              setCompanies([])
+              setCompaniesLoading(false)
+            }
+          )
+          return () => fallbackUnsubscribe()
+        } else {
+          setCompanies([])
+          setCompaniesLoading(false)
+        }
       }
     )
 
@@ -392,7 +456,7 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button className="h-9 bg-white/10 text-white hover:bg-white/20">Export snapshot</Button>
-            <Button className="h-9 bg-[#0CAA41] text-white hover:bg-[#0B5B32]">New announcement</Button>
+            <Button className="h-9 bg-orange-500 text-white hover:bg-orange-600">New announcement</Button>
           </div>
         </header>
 
@@ -529,11 +593,15 @@ function ListingsPanel({
     revenue: "",
     founded: "",
     industry: "",
+    photos: "",
   })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState("")
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [photoFiles, setPhotoFiles] = useState<File[]>([])
+  const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>([])
+  const [uploadingPhotos, setUploadingPhotos] = useState(false)
 
   const filteredItems = useMemo(() => {
     const query = filterQuery.trim().toLowerCase()
@@ -563,9 +631,12 @@ function ListingsPanel({
       revenue: "",
       founded: "",
       industry: "",
+      photos: "",
     })
     setEditingId(null)
     setFormError(null)
+    setPhotoFiles([])
+    setExistingPhotoUrls([])
   }
 
   const parseLocation = (location: string) => {
@@ -575,6 +646,42 @@ function ListingsPanel({
       return { city: parts[0], state: parts.slice(1).join(", ") }
     }
     return { city: "", state: location }
+  }
+
+  const uploadPhoto = async (file: File, listingId: string): Promise<string> => {
+    const fileExtension = file.name.split(".").pop() || "jpg"
+    const fileName = `${listingId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`
+    const storageRef = ref(storage, `listings/${collectionName}/${fileName}`)
+    const snapshot = await uploadBytes(storageRef, file)
+    return await getDownloadURL(snapshot.ref)
+  }
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"))
+    
+    if (imageFiles.length === 0) {
+      setFormError("Please select image files only.")
+      return
+    }
+
+    // Limit to 10 photos
+    const remainingSlots = 10 - (existingPhotoUrls.length + photoFiles.length)
+    if (imageFiles.length > remainingSlots) {
+      setFormError(`You can only upload ${remainingSlots} more photo(s). Maximum 10 photos allowed.`)
+      return
+    }
+
+    setPhotoFiles((prev) => [...prev, ...imageFiles.slice(0, remainingSlots)])
+    setFormError(null)
+  }
+
+  const removePhotoFile = (index: number) => {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const removeExistingPhoto = (index: number) => {
+    setExistingPhotoUrls((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleSave = async () => {
@@ -588,33 +695,102 @@ function ListingsPanel({
     setFormError(null)
 
     try {
+      if (!collectionName) {
+        throw new Error("Collection name is missing")
+      }
+      
       const locationValue = draft.location.trim()
       const locationData = parseLocation(locationValue)
       const cityValue = draft.city.trim() || locationData.city
       const stateValue = draft.state.trim() || locationData.state
       const resolvedLocation = locationValue || [cityValue, stateValue].filter(Boolean).join(", ")
+      
       const listingData: Record<string, unknown> = {
         name: trimmedName,
-        location: resolvedLocation,
-        state: stateValue,
-        city: cityValue,
+        location: resolvedLocation || "",
         status: draft.status,
-        description: draft.description.trim(),
+        description: draft.description.trim() || "",
         updatedAt: serverTimestamp(),
       }
 
-      listingData.rating = parseOptionalNumber(draft.rating)
-      listingData.jobsCount = parseOptionalNumber(draft.jobsCount)
-      listingData.reviewsCount = parseOptionalNumber(draft.reviewsCount)
-      listingData.salariesCount = parseOptionalNumber(draft.salariesCount)
-      listingData.locationsCount = parseOptionalNumber(draft.locationsCount)
-      listingData.logoUrl = draft.logoUrl.trim()
-      listingData.website = draft.website.trim()
-      listingData.employeeCount = draft.employeeCount.trim()
-      listingData.type = draft.type.trim()
-      listingData.revenue = draft.revenue.trim()
-      listingData.founded = draft.founded.trim()
-      listingData.industry = draft.industry.trim()
+      // Only add optional fields if they have values
+      if (stateValue) listingData.state = stateValue
+      if (cityValue) listingData.city = cityValue
+      
+      const rating = parseOptionalNumber(draft.rating)
+      if (rating !== null) listingData.rating = rating
+      
+      const jobsCount = parseOptionalNumber(draft.jobsCount)
+      if (jobsCount !== null) listingData.jobsCount = jobsCount
+      
+      const reviewsCount = parseOptionalNumber(draft.reviewsCount)
+      if (reviewsCount !== null) listingData.reviewsCount = reviewsCount
+      
+      const salariesCount = parseOptionalNumber(draft.salariesCount)
+      if (salariesCount !== null) listingData.salariesCount = salariesCount
+      
+      const locationsCount = parseOptionalNumber(draft.locationsCount)
+      if (locationsCount !== null) listingData.locationsCount = locationsCount
+      
+      const logoUrl = draft.logoUrl.trim()
+      if (logoUrl) listingData.logoUrl = logoUrl
+      
+      const website = draft.website.trim()
+      if (website) listingData.website = website
+      
+      const employeeCount = draft.employeeCount.trim()
+      if (employeeCount) listingData.employeeCount = employeeCount
+      
+      const type = draft.type.trim()
+      if (type) listingData.type = type
+      
+      const revenue = draft.revenue.trim()
+      if (revenue) listingData.revenue = revenue
+      
+      const founded = draft.founded.trim()
+      if (founded) listingData.founded = founded
+      
+      const industry = draft.industry.trim()
+      if (industry) listingData.industry = industry
+      
+      // Upload photos first if there are any
+      let photoUrls: string[] = [...existingPhotoUrls]
+      
+      if (photoFiles.length > 0) {
+        setUploadingPhotos(true)
+        try {
+          // If editing, use existing ID, otherwise we'll need to create the listing first
+          const tempId = editingId || `temp_${Date.now()}`
+          const uploadPromises = photoFiles.map((file) => uploadPhoto(file, tempId))
+          const uploadedUrls = await Promise.all(uploadPromises)
+          photoUrls = [...photoUrls, ...uploadedUrls]
+        } catch (error) {
+          console.error("Error uploading photos:", error)
+          setFormError("Failed to upload some photos. Please try again.")
+          setUploadingPhotos(false)
+          setSaving(false)
+          return
+        }
+        setUploadingPhotos(false)
+      }
+      
+      // Also parse photos from textarea (for backward compatibility)
+      const photosText = draft.photos.trim()
+      if (photosText) {
+        const photosArray = photosText
+          .split("\n")
+          .map((url) => url.trim())
+          .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))
+        photoUrls = [...photoUrls, ...photosArray]
+      }
+
+      // Add photos to listing data
+      if (photoUrls.length > 0) {
+        listingData.photos = photoUrls
+      }
+
+      console.log("Saving to collection:", collectionName)
+      console.log("Listing data:", listingData)
 
       if (editingId) {
         // Update existing listing
@@ -622,16 +798,21 @@ function ListingsPanel({
         await updateDoc(listingRef, listingData)
       } else {
         // Create new listing
-        await addDoc(collection(db, collectionName), {
+        const docRef = await addDoc(collection(db, collectionName), {
           ...listingData,
           createdAt: serverTimestamp(),
         })
+        
+        // If we uploaded photos with temp ID, we should re-upload them with the real ID
+        // For now, we'll keep them as is since the path includes the temp ID
+        // In production, you might want to move them to the correct path
       }
 
       resetDraft()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving listing:", error)
-      setFormError("Failed to save listing. Please try again.")
+      const errorMessage = error?.message || "Unknown error occurred"
+      setFormError(`Failed to save listing: ${errorMessage}. Please check the console for details.`)
     } finally {
       setSaving(false)
     }
@@ -658,9 +839,12 @@ function ListingsPanel({
       revenue: item.revenue || "",
       founded: item.founded || "",
       industry: item.industry || "",
+      photos: "",
     })
     setEditingId(item.id)
     setFormError(null)
+    setPhotoFiles([])
+    setExistingPhotoUrls(item.photos && item.photos.length > 0 ? item.photos : [])
   }
 
   const handleDelete = async (id: string) => {
@@ -864,6 +1048,95 @@ function ListingsPanel({
               className="h-10 bg-white/10 text-white placeholder:text-white/40"
             />
           </div>
+          <div>
+            <label className="block text-xs text-white/60 mb-2">Photos (Upload or enter URLs)</label>
+            
+            {/* File Upload */}
+            <div className="mb-3">
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <Upload className="h-8 w-8 text-white/60 mb-2" />
+                  <p className="text-sm text-white/80 font-medium">Click to upload photos</p>
+                  <p className="text-xs text-white/50 mt-1">PNG, JPG, GIF up to 10MB (Max 10 photos)</p>
+                </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={handlePhotoUpload}
+                  disabled={uploadingPhotos || saving}
+                />
+              </label>
+            </div>
+
+            {/* Photo Previews */}
+            {(existingPhotoUrls.length > 0 || photoFiles.length > 0) && (
+              <div className="mb-3">
+                <p className="text-xs text-white/60 mb-2">
+                  {existingPhotoUrls.length + photoFiles.length} photo(s) selected
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {/* Existing Photos */}
+                  {existingPhotoUrls.map((url, index) => (
+                    <div key={`existing-${index}`} className="relative group">
+                      <img
+                        src={url}
+                        alt={`Photo ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg border border-white/10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeExistingPhoto(index)}
+                        className="absolute top-1 right-1 p-1 rounded-full bg-red-500/80 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        disabled={uploadingPhotos || saving}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* New Photo Files */}
+                  {photoFiles.map((file, index) => (
+                    <div key={`file-${index}`} className="relative group">
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={`Preview ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg border border-white/10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhotoFile(index)}
+                        className="absolute top-1 right-1 p-1 rounded-full bg-red-500/80 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        disabled={uploadingPhotos || saving}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="absolute bottom-1 left-1 right-1">
+                        <p className="text-[10px] text-white/80 bg-black/60 rounded px-1 truncate">
+                          {file.name}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* URL Input (Fallback) */}
+            <details className="mt-3">
+              <summary className="text-xs text-white/60 cursor-pointer hover:text-white/80">
+                Or enter photo URLs manually (one per line)
+              </summary>
+              <Textarea
+                value={draft.photos}
+                onChange={(event) => setDraft((prev) => ({ ...prev, photos: event.target.value }))}
+                placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg"
+                className="mt-2 min-h-[80px] bg-white/10 text-white placeholder:text-white/40"
+                rows={3}
+              />
+            </details>
+          </div>
           <select
             value={draft.status}
             onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as ListingStatus }))}
@@ -883,14 +1156,14 @@ function ListingsPanel({
 
           <div className="flex gap-2">
             <Button 
-              className="flex-1 bg-[#0CAA41] text-white hover:bg-[#0B5B32]" 
+              className="flex-1 bg-orange-500 text-white hover:bg-orange-600" 
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || uploadingPhotos}
             >
-              {saving ? "Saving..." : editingId ? "Update listing" : "Add listing"}
+              {uploadingPhotos ? "Uploading photos..." : saving ? "Saving..." : editingId ? "Update listing" : "Add listing"}
             </Button>
             {editingId && (
-              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft} disabled={saving}>
+              <Button className="flex-1 bg-white/10 text-white hover:bg-white/20" onClick={resetDraft} disabled={saving || uploadingPhotos}>
                 Cancel
               </Button>
             )}
@@ -1062,7 +1335,7 @@ function ReviewsPanel({
           </select>
 
           <div className="flex gap-2">
-            <Button className="flex-1 bg-[#0CAA41] text-white hover:bg-[#0B5B32]" onClick={handleSave}>
+            <Button className="flex-1 bg-orange-500 text-white hover:bg-orange-600" onClick={handleSave}>
               {editingId ? "Update review" : "Add review"}
             </Button>
             {editingId && (

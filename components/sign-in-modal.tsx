@@ -264,7 +264,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         {/* Header */}
         <div className="relative px-8 pt-10 pb-6 text-center">
           <div className="mb-4 flex justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0CAA41] to-[#0B8A35] shadow-lg shadow-[#0CAA41]/20">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/20">
               <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
@@ -281,8 +281,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           {submitted && submittedData ? (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#0CAA41]/20 to-[#0CAA41]/10 ring-4 ring-[#0CAA41]/10">
-                  <svg className="h-10 w-10 text-[#0CAA41]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-orange-500/20 to-orange-500/10 ring-4 ring-orange-500/10">
+                  <svg className="h-10 w-10 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
@@ -311,7 +311,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
               <Button 
                 onClick={handleClose} 
-                className="w-full h-12 rounded-xl bg-gradient-to-r from-[#0CAA41] to-[#0B8A35] text-white font-semibold shadow-lg shadow-[#0CAA41]/20 transition-all hover:shadow-[#0CAA41]/30 hover:scale-[1.02]"
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold shadow-lg shadow-orange-500/20 transition-all hover:shadow-orange-500/30 hover:scale-[1.02]"
               >
                 Done
               </Button>
@@ -329,7 +329,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-orange-500 focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
@@ -344,7 +344,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-orange-500 focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
@@ -359,7 +359,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-orange-500 focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
@@ -374,7 +374,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-orange-500 focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
@@ -387,18 +387,18 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               <Button
                 type="submit"
                 disabled={isCreateSaving}
-                className="w-full h-12 rounded-xl bg-gradient-to-r from-[#0CAA41] to-[#0B8A35] text-white font-semibold shadow-lg shadow-[#0CAA41]/20 transition-all hover:shadow-[#0CAA41]/30 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold shadow-lg shadow-orange-500/20 transition-all hover:shadow-orange-500/30 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 {isCreateSaving ? "Creating..." : "Create account"}
               </Button>
 
               <p className="text-xs text-center leading-relaxed text-[#9AA0A6]">
                 By continuing, you agree to WorkHub's{" "}
-                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
+                <a href="#" className="font-medium text-orange-500 transition-colors hover:text-orange-600 hover:underline">
                   Terms of Use
                 </a>{" "}
                 and{" "}
-                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
+                <a href="#" className="font-medium text-orange-500 transition-colors hover:text-orange-600 hover:underline">
                   Privacy Policy
                 </a>
                 .
@@ -412,7 +412,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                     setIsCreateMode(false)
                     setSubmitError(null)
                   }}
-                  className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline"
+                  className="font-medium text-orange-500 transition-colors hover:text-orange-600 hover:underline"
                 >
                   Sign in
                 </button>
@@ -470,7 +470,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-orange-500 focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
@@ -485,25 +485,25 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-[#0CAA41] focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-[#0CAA41]/20"
+                  className="h-12 rounded-xl border-white/20 bg-[rgba(255,255,255,0.08)] px-4 text-[#E6E8EA] placeholder-[#9AA0A6] backdrop-blur-sm transition-all focus:border-orange-500 focus:bg-[rgba(255,255,255,0.12)] focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
               <Button
                 type="submit"
                 disabled={isSaving}
-                className="w-full h-12 rounded-xl bg-gradient-to-r from-[#0CAA41] to-[#0B8A35] text-white font-semibold shadow-lg shadow-[#0CAA41]/20 transition-all hover:shadow-[#0CAA41]/30 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold shadow-lg shadow-orange-500/20 transition-all hover:shadow-orange-500/30 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 {isSaving ? "Saving..." : "Continue"}
               </Button>
 
               <p className="text-xs text-center leading-relaxed text-[#9AA0A6]">
                 By continuing, you agree to WorkHub's{" "}
-                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
+                <a href="#" className="font-medium text-orange-500 transition-colors hover:text-orange-600 hover:underline">
                   Terms of Use
                 </a>{" "}
                 and{" "}
-                <a href="#" className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline">
+                <a href="#" className="font-medium text-orange-500 transition-colors hover:text-orange-600 hover:underline">
                   Privacy Policy
                 </a>
                 .
@@ -517,7 +517,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                     setIsCreateMode(true)
                     setSubmitError(null)
                   }}
-                  className="font-medium text-[#0CAA41] transition-colors hover:text-[#0B8A35] hover:underline"
+                  className="font-medium text-orange-500 transition-colors hover:text-orange-600 hover:underline"
                 >
                   Create one
                 </button>
