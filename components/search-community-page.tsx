@@ -7,7 +7,7 @@ import SignInModal from "./sign-in-modal"
 import { collection, query, onSnapshot, Timestamp, addDoc, serverTimestamp, where, orderBy } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 
-const tabs = ["Feed", "School", "Colleges", "Kindergarden"]
+const tabs = ["Feed", "School", "Colleges", "Kindergarden", "Courses"]
 const detailTabs = [
   { id: "about", label: "About" },
   { id: "reviews", label: "Reviews" },
@@ -55,6 +55,7 @@ const getCollectionName = (tab: string): string => {
     School: "school",
     Colleges: "colleges",
     Kindergarden: "kindergarden",
+    Courses: "courses",
   }
   return tabMap[tab] || "feed"
 }

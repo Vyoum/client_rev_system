@@ -63,15 +63,23 @@ const tabs = [
   { id: "colleges", label: "School" },
   { id: "jobs", label: "Colleges" },
   { id: "companies", label: "Kindergarden" },
+  { id: "courses", label: "Courses" },
   { id: "reviews", label: "Reviews" },
 ] as const
 
 type TabId = (typeof tabs)[number]["id"]
-type ListingTabId = "schools" | "colleges" | "jobs" | "companies"
+type ListingTabId = "schools" | "colleges" | "jobs" | "companies" | "courses"
 
 // Helper function to get collection name from tab ID
 const getCollectionName = (tabId: ListingTabId): string => {
-  return tabId // "schools", "colleges", "jobs", "companies"
+  const collectionMap: Record<ListingTabId, string> = {
+    schools: "feed",
+    colleges: "school",
+    jobs: "colleges",
+    companies: "kindergarden",
+    courses: "courses",
+  }
+  return collectionMap[tabId] || "feed"
 }
 
 const initialReviews: ReviewItem[] = [
@@ -152,10 +160,12 @@ export default function AdminPage() {
   const [colleges, setColleges] = useState<ListingItem[]>([])
   const [jobs, setJobs] = useState<ListingItem[]>([])
   const [companies, setCompanies] = useState<ListingItem[]>([])
+  const [courses, setCourses] = useState<ListingItem[]>([])
   const [schoolsLoading, setSchoolsLoading] = useState(true)
   const [collegesLoading, setCollegesLoading] = useState(true)
   const [jobsLoading, setJobsLoading] = useState(true)
   const [companiesLoading, setCompaniesLoading] = useState(true)
+  const [coursesLoading, setCoursesLoading] = useState(true)
   const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews)
 
   // Load users
@@ -408,6 +418,59 @@ export default function AdminPage() {
     return () => unsubscribe()
   }, [])
 
+  // Load courses
+  useEffect(() => {
+    const coursesRef = collection(db, "courses")
+    let coursesQuery
+    try {
+      coursesQuery = query(coursesRef, orderBy("updatedAt", "desc"))
+    } catch (error) {
+      coursesQuery = query(coursesRef)
+    }
+
+    const unsubscribe = onSnapshot(
+      coursesQuery,
+      (snapshot) => {
+        const nextCourses = snapshot.docs.map(mapListingData).sort((a, b) => {
+          const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+          const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+          return bTime - aTime
+        })
+        setCourses(nextCourses)
+        setCoursesLoading(false)
+      },
+      (error) => {
+        console.error("Loading courses failed:", error)
+        if (error.code === "failed-precondition") {
+          const fallbackQuery = query(coursesRef)
+          const fallbackUnsubscribe = onSnapshot(
+            fallbackQuery,
+            (snapshot) => {
+              const nextCourses = snapshot.docs.map(mapListingData).sort((a, b) => {
+                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
+                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
+                return bTime - aTime
+              })
+              setCourses(nextCourses)
+              setCoursesLoading(false)
+            },
+            (fallbackError) => {
+              console.error("Loading courses failed (fallback):", fallbackError)
+              setCourses([])
+              setCoursesLoading(false)
+            }
+          )
+          return () => fallbackUnsubscribe()
+        } else {
+          setCourses([])
+          setCoursesLoading(false)
+        }
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
+
   const filteredUsers = useMemo(() => {
     const query = userQuery.trim().toLowerCase()
     if (!query) return users
@@ -420,12 +483,13 @@ export default function AdminPage() {
     })
   }, [userQuery, users])
 
-  const listingsTotal = schools.length + colleges.length + jobs.length + companies.length
+  const listingsTotal = schools.length + colleges.length + jobs.length + companies.length + courses.length
   const publishedListings =
     schools.filter((item) => item.status === "Published").length +
     colleges.filter((item) => item.status === "Published").length +
     jobs.filter((item) => item.status === "Published").length +
-    companies.filter((item) => item.status === "Published").length
+    companies.filter((item) => item.status === "Published").length +
+    courses.filter((item) => item.status === "Published").length
   const hiddenReviews = reviews.filter((review) => review.status === "Hidden").length
 
   const listingConfigMap: Record<ListingTabId, { label: string; items: ListingItem[]; setItems: Dispatch<SetStateAction<ListingItem[]>>; collectionName: string; loading: boolean }> = {
@@ -433,10 +497,11 @@ export default function AdminPage() {
     colleges: { label: "School", items: colleges, setItems: setColleges, collectionName: "school", loading: collegesLoading },
     jobs: { label: "Colleges", items: jobs, setItems: setJobs, collectionName: "colleges", loading: jobsLoading },
     companies: { label: "Kindergarden", items: companies, setItems: setCompanies, collectionName: "kindergarden", loading: companiesLoading },
+    courses: { label: "Courses", items: courses, setItems: setCourses, collectionName: "courses", loading: coursesLoading },
   }
 
   const activeListingConfig =
-    activeTab === "schools" || activeTab === "colleges" || activeTab === "jobs" || activeTab === "companies"
+    activeTab === "schools" || activeTab === "colleges" || activeTab === "jobs" || activeTab === "companies" || activeTab === "courses"
       ? listingConfigMap[activeTab]
       : null
 
