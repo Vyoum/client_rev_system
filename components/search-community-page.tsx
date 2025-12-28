@@ -84,6 +84,7 @@ export default function SearchCommunityPage() {
   const [reviewForm, setReviewForm] = useState({ rating: 5, message: "" })
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
+  const [calculatedRatings, setCalculatedRatings] = useState<Record<string, { average: number; count: number }>>({})
   const locationRef = useRef<HTMLDivElement>(null)
   const citiesRef = useRef<HTMLDivElement>(null)
 
@@ -157,6 +158,60 @@ export default function SearchCommunityPage() {
     setReviews([])
     setReviewForm({ rating: 5, message: "" })
     setReviewError(null)
+  }
+
+  // Load reviews for all listings to calculate average ratings
+  const loadReviewsForListings = (listingIds: string[]) => {
+    if (listingIds.length === 0) return
+
+    // Firestore 'in' query supports max 10 items, so we need to batch
+    const batches: string[][] = []
+    for (let i = 0; i < listingIds.length; i += 10) {
+      batches.push(listingIds.slice(i, i + 10))
+    }
+
+    batches.forEach((batch) => {
+      const reviewsRef = collection(db, "reviews")
+      const reviewsQuery = query(reviewsRef, where("listingId", "in", batch))
+
+      const unsubscribe = onSnapshot(
+        reviewsQuery,
+        (snapshot) => {
+          const reviewsByListing: Record<string, number[]> = {}
+          
+          snapshot.docs.forEach((doc) => {
+            const data = doc.data()
+            const listingId = data.listingId
+            const rating = typeof data.rating === "number" ? data.rating : null
+            
+            if (listingId && rating !== null && rating >= 1 && rating <= 5) {
+              if (!reviewsByListing[listingId]) {
+                reviewsByListing[listingId] = []
+              }
+              reviewsByListing[listingId].push(rating)
+            }
+          })
+
+          // Calculate average ratings
+          setCalculatedRatings((prev) => {
+            const newRatings = { ...prev }
+            Object.keys(reviewsByListing).forEach((listingId) => {
+              const ratings = reviewsByListing[listingId]
+              const sum = ratings.reduce((acc, rating) => acc + rating, 0)
+              const average = sum / ratings.length
+              newRatings[listingId] = {
+                average: Math.round(average * 10) / 10, // Round to 1 decimal place
+                count: ratings.length
+              }
+            })
+            return newRatings
+          })
+        },
+        (error) => {
+          console.error("Error loading reviews for listings:", error)
+        }
+      )
+    })
   }
 
   // Load reviews for selected listing
@@ -318,6 +373,30 @@ export default function SearchCommunityPage() {
       const docRef = await addDoc(collection(db, "reviews"), reviewData)
       console.log("Review successfully saved to Firestore with ID:", docRef.id)
       
+      // Update calculated rating for this listing immediately
+      if (selectedListing) {
+        const currentRatings = calculatedRatings[selectedListing.id]
+        const newRating = reviewForm.rating
+        const currentCount = currentRatings?.count || 0
+        const currentAverage = currentRatings?.average || 0
+        
+        let newAverage: number
+        if (currentCount === 0) {
+          newAverage = newRating
+        } else {
+          const totalSum = currentAverage * currentCount + newRating
+          newAverage = totalSum / (currentCount + 1)
+        }
+        
+        setCalculatedRatings((prev) => ({
+          ...prev,
+          [selectedListing.id]: {
+            average: Math.round(newAverage * 10) / 10,
+            count: currentCount + 1
+          }
+        }))
+      }
+      
       // Reset form
       setReviewForm({ rating: 5, message: "" })
       setReviewError(null)
@@ -416,6 +495,12 @@ export default function SearchCommunityPage() {
           })
         setListings(nextListings)
         setListingsLoading(false)
+        
+        // Load reviews for all listings to calculate average ratings
+        if (nextListings.length > 0) {
+          const listingIds = nextListings.map(l => l.id)
+          loadReviewsForListings(listingIds)
+        }
       },
       (error) => {
         console.error("Error loading listings:", error)
@@ -522,12 +607,19 @@ export default function SearchCommunityPage() {
               )}
               <div>
                 <h2 className="text-2xl font-semibold text-[#111827]">{selectedListing.name}</h2>
-                {typeof selectedListing.rating === "number" && (
-                  <div className="mt-1 flex items-center gap-2 text-sm text-[#111827]">
-                    <span>{selectedListing.rating.toFixed(1)}</span>
-                    <StarIcon />
-                  </div>
-                )}
+                {(() => {
+                  const calculatedRating = calculatedRatings[selectedListing.id]
+                  const displayRating = calculatedRating?.average ?? null
+                  return displayRating !== null && (
+                    <div className="mt-1 flex items-center gap-2 text-sm text-[#111827]">
+                      <span>{displayRating.toFixed(1)}</span>
+                      <StarIcon />
+                      {calculatedRating.count > 0 && (
+                        <span className="text-[#6B7280]">({formatCount(calculatedRating.count)} reviews)</span>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
             <button
@@ -950,6 +1042,11 @@ export default function SearchCommunityPage() {
             <div className="rounded-2xl border border-[#E5E7EB] bg-white">
               <ul className="divide-y divide-[#E5E7EB]">
                 {filteredListings.map((listing) => {
+                  // Get calculated rating from user reviews (preferred over admin rating)
+                  const calculatedRating = calculatedRatings[listing.id]
+                  const displayRating = calculatedRating?.average ?? null
+                  const reviewCount = calculatedRating?.count ?? 0
+                  
                   // Build stats parts (excluding reviews, which will be shown with rating)
                   const statsParts: string[] = []
                   if (typeof listing.jobsCount === "number") {
@@ -959,25 +1056,8 @@ export default function SearchCommunityPage() {
                     statsParts.push(`${formatCount(listing.salariesCount)} salaries`)
                   }
                   
-                  // Build rating and reviews line
-                  const ratingAndReviews: string[] = []
-                  if (typeof listing.rating === "number") {
-                    ratingAndReviews.push(`${listing.rating.toFixed(1)}★`)
-                  }
-                  if (typeof listing.reviewsCount === "number") {
-                    ratingAndReviews.push(`${formatCount(listing.reviewsCount)} reviews`)
-                  }
-                  
-                  // Combine all parts
-                  const metaParts: string[] = []
-                  if (ratingAndReviews.length > 0) {
-                    metaParts.push(ratingAndReviews.join(" "))
-                  }
-                  metaParts.push(...statsParts)
-                  
                   const locationDisplay = [listing.city, listing.state].filter(Boolean).join(", ") || "Location not specified"
-                  const metaLine = metaParts.length > 0 ? metaParts.join(" · ") : locationDisplay
-                  const showDescription = !metaParts.length && listing.description
+                  const showDescription = !displayRating && statsParts.length === 0 && listing.description
 
                   return (
                     <li key={listing.id}>
@@ -1002,22 +1082,22 @@ export default function SearchCommunityPage() {
                         <div className="flex-1">
                           <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
                           <p className="mt-1 text-sm text-[#6B7280]">
-                            {typeof listing.rating === "number" ? (
+                            {displayRating !== null ? (
                               <>
                                 <span className="font-bold text-[#111827]">
-                                  {listing.rating.toFixed(1)}★
-                                  {typeof listing.reviewsCount === "number" ? ` ${formatCount(listing.reviewsCount)} reviews` : ""}
+                                  {displayRating.toFixed(1)}★
+                                  {reviewCount > 0 ? ` ${formatCount(reviewCount)} reviews` : ""}
                                 </span>
                                 {statsParts.length > 0 && " · "}
                               </>
-                            ) : typeof listing.reviewsCount === "number" ? (
+                            ) : reviewCount > 0 ? (
                               <>
-                                <span className="text-[#6B7280]">{formatCount(listing.reviewsCount)} reviews</span>
+                                <span className="text-[#6B7280]">{formatCount(reviewCount)} reviews</span>
                                 {statsParts.length > 0 && " · "}
                               </>
                             ) : null}
                             {statsParts.length > 0 && statsParts.join(" · ")}
-                            {metaParts.length === 0 && locationDisplay}
+                            {!displayRating && statsParts.length === 0 && locationDisplay}
                           </p>
                           {showDescription && (
                             <p className="mt-1 text-sm text-[#4B5563] line-clamp-2">{listing.description}</p>
