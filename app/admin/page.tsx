@@ -21,6 +21,8 @@ type ListingItem = {
   city?: string
   status: ListingStatus
   description: string
+  whatsNew?: string
+  others?: string
   updatedAt: string
   createdAt?: Timestamp | string
   rating?: number | null
@@ -131,6 +133,8 @@ const mapListingData = (doc: any): ListingItem => {
     city: data.city || "",
     status: (data.status || "Draft") as ListingStatus,
     description: data.description || "",
+    whatsNew: typeof data.whatsNew === "string" ? data.whatsNew : "",
+    others: typeof data.others === "string" ? data.others : "",
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
     createdAt: data.createdAt,
     rating: parseOptionalNumber(data.rating),
@@ -645,7 +649,9 @@ function ListingsPanel({
     state: "",
     city: "",
     status: "Published" as ListingStatus,
+    whatsNew: "",
     description: "",
+    others: "",
     rating: "",
     jobsCount: "",
     reviewsCount: "",
@@ -660,6 +666,7 @@ function ListingsPanel({
     industry: "",
     photos: "",
   })
+  const [activeFormSection, setActiveFormSection] = useState<"whatsnew" | "reviews" | "about" | "photos" | "others">("whatsnew")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState("")
   const [formError, setFormError] = useState<string | null>(null)
@@ -683,7 +690,9 @@ function ListingsPanel({
       state: "",
       city: "",
       status: "Published",
+      whatsNew: "",
       description: "",
+      others: "",
       rating: "",
       jobsCount: "",
       reviewsCount: "",
@@ -702,6 +711,7 @@ function ListingsPanel({
     setFormError(null)
     setPhotoFiles([])
     setExistingPhotoUrls([])
+    setActiveFormSection("whatsnew")
   }
 
   const parseLocation = (location: string) => {
@@ -783,6 +793,14 @@ function ListingsPanel({
         description: draft.description.trim() || "",
         updatedAt: serverTimestamp(),
       }
+
+      // Add What's New field
+      const whatsNew = draft.whatsNew.trim()
+      if (whatsNew) listingData.whatsNew = whatsNew
+
+      // Add Others field
+      const others = draft.others.trim()
+      if (others) listingData.others = others
 
       // Only add optional fields if they have values
       if (stateValue) listingData.state = stateValue
@@ -905,7 +923,7 @@ function ListingsPanel({
       console.log("Saving to collection:", collectionName)
       console.log("Listing data:", listingData)
 
-      resetDraft()
+    resetDraft()
     } catch (error: any) {
       console.error("Error saving listing:", error)
       const errorMessage = error?.message || "Unknown error occurred"
@@ -925,7 +943,9 @@ function ListingsPanel({
       state: item.state || "",
       city: item.city || "",
       status: item.status,
+      whatsNew: item.whatsNew || "",
       description: item.description,
+      others: item.others || "",
       rating: item.rating != null ? String(item.rating) : "",
       jobsCount: item.jobsCount != null ? String(item.jobsCount) : "",
       reviewsCount: item.reviewsCount != null ? String(item.reviewsCount) : "",
@@ -953,8 +973,8 @@ function ListingsPanel({
 
     try {
       await deleteDoc(doc(db, collectionName, id))
-      if (editingId === id) {
-        resetDraft()
+    if (editingId === id) {
+      resetDraft()
       }
     } catch (error) {
       console.error("Error deleting listing:", error)
@@ -1024,6 +1044,7 @@ function ListingsPanel({
         <p className="text-sm text-white/60">Fill in the details and save.</p>
         <p className="text-xs text-white/40">Firestore collection: {collectionName}</p>
 
+        {/* Basic Info */}
         <div className="mt-4 space-y-3">
           <Input
             value={draft.name}
@@ -1032,12 +1053,12 @@ function ListingsPanel({
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              value={draft.location}
-              onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))}
+          <Input
+            value={draft.location}
+            onChange={(event) => setDraft((prev) => ({ ...prev, location: event.target.value }))}
               placeholder="Location (City, State)"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
+            className="h-10 bg-white/10 text-white placeholder:text-white/40"
+          />
             <Input
               value={draft.state}
               onChange={(event) => setDraft((prev) => ({ ...prev, state: event.target.value }))}
@@ -1065,89 +1086,69 @@ function ListingsPanel({
             placeholder="Logo URL"
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              type="number"
-              min="0"
-              max="5"
-              step="0.1"
-              value={draft.rating}
-              onChange={(event) => setDraft((prev) => ({ ...prev, rating: event.target.value }))}
-              placeholder="Rating (0-5)"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-            <Input
-              type="number"
-              min="0"
-              value={draft.jobsCount}
-              onChange={(event) => setDraft((prev) => ({ ...prev, jobsCount: event.target.value }))}
-              placeholder="Jobs count"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
+        </div>
+
+        {/* Form Sections Tabs */}
+        <div className="mt-6 border-b border-white/10">
+          <div className="flex gap-4">
+            {(["whatsnew", "reviews", "about", "photos", "others"] as const).map((section) => (
+              <button
+                key={section}
+                type="button"
+                onClick={() => setActiveFormSection(section)}
+                className={`pb-3 px-1 text-sm font-semibold transition-colors ${
+                  activeFormSection === section
+                    ? "text-orange-500 border-b-2 border-orange-500"
+                    : "text-white/60 hover:text-white/80"
+                }`}
+              >
+                {section === "whatsnew" ? "What's New" : section.charAt(0).toUpperCase() + section.slice(1)}
+              </button>
+            ))}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              type="number"
-              min="0"
-              value={draft.reviewsCount}
-              onChange={(event) => setDraft((prev) => ({ ...prev, reviewsCount: event.target.value }))}
-              placeholder="Reviews count"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-            <Input
-              type="number"
-              min="0"
-              value={draft.salariesCount}
-              onChange={(event) => setDraft((prev) => ({ ...prev, salariesCount: event.target.value }))}
-              placeholder="Salaries count"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              type="number"
-              min="0"
-              value={draft.locationsCount}
-              onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
-              placeholder="Locations count"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-            <Input
-              value={draft.employeeCount}
-              onChange={(event) => setDraft((prev) => ({ ...prev, employeeCount: event.target.value }))}
-              placeholder="Employee count"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              value={draft.type}
-              onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
-              placeholder="Type (e.g., Public)"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-            <Input
-              value={draft.revenue}
-              onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
-              placeholder="Revenue"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              value={draft.founded}
-              onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
-              placeholder="Founded year"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-            <Input
-              value={draft.industry}
-              onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
-              placeholder="Industry"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
-          </div>
-          <div>
+        </div>
+
+        {/* Form Sections Content */}
+        <div className="mt-4 space-y-4">
+          {/* What's New Section */}
+          {activeFormSection === "whatsnew" && (
+            <div>
+              <label className="block text-xs text-white/60 mb-2">What's New</label>
+              <Textarea
+                value={draft.whatsNew}
+                onChange={(event) => setDraft((prev) => ({ ...prev, whatsNew: event.target.value }))}
+                placeholder="Enter latest news and updates..."
+                className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
+              />
+            </div>
+          )}
+
+          {/* Reviews Section */}
+          {activeFormSection === "reviews" && (
+            <div className="space-y-3">
+              <p className="text-sm text-white/60">Reviews are managed separately in the Reviews tab.</p>
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-white/50">To manage reviews, go to the "Reviews" tab in the main navigation.</p>
+              </div>
+            </div>
+          )}
+
+          {/* About Section */}
+          {activeFormSection === "about" && (
+            <div>
+              <label className="block text-xs text-white/60 mb-2">About</label>
+          <Textarea
+            value={draft.description}
+            onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+                placeholder="Enter description and details..."
+                className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
+              />
+            </div>
+          )}
+
+          {/* Photos Section */}
+          {activeFormSection === "photos" && (
+            <div>
             <label className="block text-xs text-white/60 mb-2">Photos (Upload or enter URLs)</label>
             
             {/* File Upload */}
@@ -1235,25 +1236,108 @@ function ListingsPanel({
                 rows={3}
               />
             </details>
-          </div>
-          <select
-            value={draft.status}
-            onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as ListingStatus }))}
-            className="h-10 w-full rounded-md border border-white/10 bg-white/10 px-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-          >
-            <option value="Draft">Draft</option>
-            <option value="Published">Published</option>
-          </select>
-          <Textarea
-            value={draft.description}
-            onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-            placeholder="About"
-            className="min-h-[110px] bg-white/10 text-white placeholder:text-white/40"
-          />
+            </div>
+          )}
 
-          {formError && <p className="text-xs text-red-300">{formError}</p>}
+          {/* Others Section */}
+          {activeFormSection === "others" && (
+            <div className="space-y-3 w-full">
+              <label className="block text-xs text-white/60 mb-2">Others</label>
+              <Textarea
+                value={draft.others}
+                onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
+                placeholder="Enter additional information..."
+                className="min-h-[100px] bg-white/10 text-white placeholder:text-white/40 w-full"
+              />
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                <Input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  value={draft.rating}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, rating: event.target.value }))}
+                  placeholder="Rating (0-5)"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  value={draft.jobsCount}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, jobsCount: event.target.value }))}
+                  placeholder="Jobs count"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+              </div>
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                <Input
+                  type="number"
+                  min="0"
+                  value={draft.reviewsCount}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, reviewsCount: event.target.value }))}
+                  placeholder="Reviews count"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  value={draft.salariesCount}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, salariesCount: event.target.value }))}
+                  placeholder="Salaries count"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+              </div>
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                <Input
+                  type="number"
+                  min="0"
+                  value={draft.locationsCount}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
+                  placeholder="Locations count"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+                <Input
+                  value={draft.employeeCount}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, employeeCount: event.target.value }))}
+                  placeholder="Employee count"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+              </div>
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                <Input
+                  value={draft.type}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
+                  placeholder="Type (e.g., Public)"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+                <Input
+                  value={draft.revenue}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
+                  placeholder="Revenue"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+              </div>
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                <Input
+                  value={draft.founded}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
+                  placeholder="Founded year"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+                <Input
+                  value={draft.industry}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
+                  placeholder="Industry"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
-          <div className="flex gap-2">
+        {formError && <p className="text-xs text-red-300 mt-4">{formError}</p>}
+
+        <div className="mt-6 flex gap-2">
             <Button 
               className="flex-1 bg-orange-500 text-white hover:bg-orange-600" 
               onClick={handleSave}
@@ -1266,7 +1350,6 @@ function ListingsPanel({
                 Cancel
               </Button>
             )}
-          </div>
         </div>
       </div>
     </div>
