@@ -39,6 +39,8 @@ type ListingItem = {
   industry?: string
   locationsCount?: number | null
   photos?: string[]
+  ceoName?: string
+  ceoPhotoUrl?: string
 }
 
 type ReviewItem = {
@@ -484,6 +486,10 @@ export default function SearchCommunityPage() {
               industry: typeof data.industry === "string" ? data.industry : "",
               locationsCount: parseNumber(data.locationsCount ?? data.locations),
               photos: Array.isArray(data.photos) ? data.photos.filter((url): url is string => typeof url === "string" && url.trim() !== "") : [],
+              whatsNew: typeof data.whatsNew === "string" ? data.whatsNew : "",
+              others: typeof data.others === "string" ? data.others : "",
+              ceoName: typeof data.ceoName === "string" ? data.ceoName : "",
+              ceoPhotoUrl: typeof data.ceoPhotoUrl === "string" ? data.ceoPhotoUrl : "",
             }
           })
           .filter((listing) => listing.status === "Published") // Filter published listings client-side
@@ -700,112 +706,235 @@ export default function SearchCommunityPage() {
               )}
             </div>
           ) : detailTab === "reviews" ? (
-            <div className="mt-5 space-y-6">
-              {/* Review Form */}
-              <form onSubmit={handleSubmitReview} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-[#111827] mb-2">
-                    Your Rating
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setReviewForm((prev) => ({ ...prev, rating: star }))}
-                        className={`transition-transform hover:scale-110 ${
-                          star <= reviewForm.rating ? "text-yellow-400" : "text-gray-300"
-                        }`}
-                      >
-                        <svg className="h-6 w-6" viewBox="0 0 24 24" fill={star <= reviewForm.rating ? "currentColor" : "none"} stroke="currentColor" strokeWidth={star <= reviewForm.rating ? 0 : 1.5}>
-                          <path d="M12 17.27l5.18 3.04-1.4-5.95L20.5 9.5l-6.12-.52L12 3.5 9.62 8.98 3.5 9.5l4.72 4.86-1.4 5.95z" />
-                        </svg>
-                      </button>
-                    ))}
-                    <span className="ml-2 text-sm text-[#6B7280]">{reviewForm.rating}/5</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="review-message" className="block text-sm font-semibold text-[#111827] mb-2">
-                    Your Review
-                  </label>
-                  <textarea
-                    id="review-message"
-                    value={reviewForm.message}
-                    onChange={(e) => setReviewForm((prev) => ({ ...prev, message: e.target.value }))}
-                    placeholder="Share your experience..."
-                    rows={4}
-                    className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#111827] placeholder-[#9CA3AF] focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                  />
-                </div>
-
-                {reviewError && (
-                  <p className="text-sm text-red-600">{reviewError}</p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={isSubmittingReview}
-                  className="w-full rounded-full bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmittingReview ? "Submitting..." : "Submit Review"}
-                </button>
-              </form>
-
-              {/* Existing Reviews */}
-              <div className="border-t border-[#E5E7EB] pt-6">
-                <h3 className="text-lg font-semibold text-[#111827] mb-4">
-                  {reviewsLoading ? (
-                    "Loading reviews..."
-                  ) : reviews.length === 0 ? (
-                    "No reviews yet"
-                  ) : (
-                    `${reviews.length} ${reviews.length === 1 ? "Review" : "Reviews"}`
-                  )}
-                </h3>
-
-                {reviewsLoading ? (
-                  <p className="text-sm text-[#6B7280]">Loading reviews...</p>
-                ) : reviews.length === 0 ? (
-                  <p className="text-sm text-[#6B7280]">Be the first to review this listing!</p>
-                ) : (
-                  <div className="space-y-4">
-                    {reviews.map((review) => (
-                      <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                        <div className="flex items-start gap-2 mb-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
-                            {review.authorName.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-[#111827]">
-                              <span className="font-semibold">{review.authorName}</span>
-                              {typeof review.rating === "number" && (
-                                <span className="font-bold text-[#111827] ml-2">
-                                  {review.rating.toFixed(1)}★
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-xs text-[#6B7280] mt-0.5">
-                              {(() => {
-                                if (!review.createdAt) return "Recently"
-                                if (typeof review.createdAt === "string") {
-                                  return new Date(review.createdAt).toLocaleDateString()
-                                }
-                                if (review.createdAt && typeof review.createdAt === "object" && "toDate" in review.createdAt) {
-                                  return review.createdAt.toDate().toLocaleDateString()
-                                }
-                                return "Recently"
-                              })()}
-                            </p>
-                          </div>
+            <div className="mt-5 space-y-8">
+              {(() => {
+                // Calculate overall rating and statistics
+                const calculatedRating = calculatedRatings[selectedListing.id]
+                const averageRating = calculatedRating?.average ?? 0
+                const totalReviews = calculatedRating?.count ?? reviews.length
+                
+                // Calculate recommendation percentage (ratings >= 4)
+                const recommendedCount = reviews.filter(r => typeof r.rating === "number" && r.rating >= 4).length
+                const recommendationPercentage = totalReviews > 0 ? Math.round((recommendedCount / totalReviews) * 100) : 0
+                
+                // Calculate ratings distribution
+                const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+                reviews.forEach(r => {
+                  if (typeof r.rating === "number" && r.rating >= 1 && r.rating <= 5) {
+                    distribution[Math.round(r.rating) as keyof typeof distribution]++
+                  }
+                })
+                const distributionPercentages = {
+                  5: totalReviews > 0 ? Math.round((distribution[5] / totalReviews) * 100) : 0,
+                  4: totalReviews > 0 ? Math.round((distribution[4] / totalReviews) * 100) : 0,
+                  3: totalReviews > 0 ? Math.round((distribution[3] / totalReviews) * 100) : 0,
+                  2: totalReviews > 0 ? Math.round((distribution[2] / totalReviews) * 100) : 0,
+                  1: totalReviews > 0 ? Math.round((distribution[1] / totalReviews) * 100) : 0,
+                }
+                
+                // Calculate CEO approval (using average rating as proxy, or can be separate field)
+                const ceoApprovalPercentage = averageRating > 0 ? Math.round((averageRating / 5) * 100) : 0
+                
+                return (
+                  <>
+                    {/* Overall Rating and Recommendation */}
+                    <div className="space-y-4">
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-5xl font-bold text-orange-500">{averageRating > 0 ? averageRating.toFixed(1) : "0.0"}</span>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <svg
+                              key={star}
+                              className={`h-6 w-6 ${star <= Math.round(averageRating) ? "text-orange-500 fill-orange-500" : "text-gray-300"}`}
+                              viewBox="0 0 24 24"
+                              fill={star <= Math.round(averageRating) ? "currentColor" : "none"}
+                              stroke="currentColor"
+                              strokeWidth={star <= Math.round(averageRating) ? 0 : 1.5}
+                            >
+                              <path d="M12 17.27l5.18 3.04-1.4-5.95L20.5 9.5l-6.12-.52L12 3.5 9.62 8.98 3.5 9.5l4.72 4.86-1.4 5.95z" />
+                            </svg>
+                          ))}
                         </div>
-                        <p className="text-sm text-[#4B5563] whitespace-pre-wrap">{review.message}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      {totalReviews > 0 && (
+                        <p className="text-sm text-[#4B5563]">{recommendationPercentage}% would recommend to a friend</p>
+                      )}
+                    </div>
+
+                    {/* CEO Approval */}
+                    {selectedListing.ceoName && (
+                      <div className="flex items-center gap-3">
+                        {selectedListing.ceoPhotoUrl ? (
+                          <img
+                            src={selectedListing.ceoPhotoUrl}
+                            alt={selectedListing.ceoName}
+                            className="h-12 w-12 rounded-full object-cover border border-[#E5E7EB]"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-500 font-semibold border border-[#E5E7EB]">
+                            {selectedListing.ceoName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-semibold text-[#111827]">{selectedListing.ceoName}</p>
+                          <p className="text-xs text-[#6B7280]">{ceoApprovalPercentage}% approve of CEO</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ratings Distribution */}
+                    {totalReviews > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-[#111827]">Ratings distribution</h4>
+                        {[5, 4, 3, 2, 1].map((star) => {
+                          const percentage = distributionPercentages[star as keyof typeof distributionPercentages]
+                          return (
+                            <div key={star} className="flex items-center gap-3">
+                              <span className="text-xs text-[#6B7280] w-8">{star} star</span>
+                              <div className="flex-1 flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-[#374151] rounded-full transition-all"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-[#6B7280] w-10 text-right">{percentage}%</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Reviews by Job Title Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-[#111827]">Reviews by job title</h4>
+                        <button
+                          onClick={() => {
+                            // Scroll to review form
+                            document.getElementById("review-form")?.scrollIntoView({ behavior: "smooth" })
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#111827] bg-white text-sm font-semibold text-[#111827] hover:bg-[#F9FAFB] transition-colors"
+                        >
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Add a review
+                        </button>
+                      </div>
+
+                      {/* Review Form */}
+                      <div id="review-form" className="border-t border-[#E5E7EB] pt-6">
+                        <form onSubmit={handleSubmitReview} className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-semibold text-[#111827] mb-2">
+                              Your Rating
+                            </label>
+                            <div className="flex items-center gap-2">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => setReviewForm((prev) => ({ ...prev, rating: star }))}
+                                  className={`transition-transform hover:scale-110 ${
+                                    star <= reviewForm.rating ? "text-orange-500" : "text-gray-300"
+                                  }`}
+                                >
+                                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill={star <= reviewForm.rating ? "currentColor" : "none"} stroke="currentColor" strokeWidth={star <= reviewForm.rating ? 0 : 1.5}>
+                                    <path d="M12 17.27l5.18 3.04-1.4-5.95L20.5 9.5l-6.12-.52L12 3.5 9.62 8.98 3.5 9.5l4.72 4.86-1.4 5.95z" />
+                                  </svg>
+                                </button>
+                              ))}
+                              <span className="ml-2 text-sm text-[#6B7280]">{reviewForm.rating}/5</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label htmlFor="review-message" className="block text-sm font-semibold text-[#111827] mb-2">
+                              Your Review
+                            </label>
+                            <textarea
+                              id="review-message"
+                              value={reviewForm.message}
+                              onChange={(e) => setReviewForm((prev) => ({ ...prev, message: e.target.value }))}
+                              placeholder="Share your experience..."
+                              rows={4}
+                              className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#111827] placeholder-[#9CA3AF] focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                            />
+                          </div>
+
+                          {reviewError && (
+                            <p className="text-sm text-red-600">{reviewError}</p>
+                          )}
+
+                          <button
+                            type="submit"
+                            disabled={isSubmittingReview}
+                            className="w-full rounded-full bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isSubmittingReview ? "Submitting..." : "Submit Review"}
+                          </button>
+                        </form>
+                      </div>
+
+                      {/* Existing Reviews */}
+                      <div className="border-t border-[#E5E7EB] pt-6">
+                        {reviewsLoading ? (
+                          <p className="text-sm text-[#6B7280]">Loading reviews...</p>
+                        ) : reviews.length === 0 ? (
+                          <p className="text-sm text-[#6B7280]">Be the first to review this listing!</p>
+                        ) : (
+                          <div className="space-y-4">
+                            {reviews.map((review) => (
+                              <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
+                                    {review.authorName.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm text-[#111827]">
+                                      <span className="font-semibold">{review.authorName}</span>
+                                      {typeof review.rating === "number" && (
+                                        <span className="font-bold text-[#111827] ml-2">
+                                          {review.rating.toFixed(1)}★
+                                        </span>
+                                      )}
+                                    </p>
+                                    <p className="text-xs text-[#6B7280] mt-0.5">
+                                      {(() => {
+                                        if (!review.createdAt) return "Recently"
+                                        if (typeof review.createdAt === "string") {
+                                          return new Date(review.createdAt).toLocaleDateString()
+                                        }
+                                        if (review.createdAt && typeof review.createdAt === "object" && "toDate" in review.createdAt) {
+                                          return review.createdAt.toDate().toLocaleDateString()
+                                        }
+                                        return "Recently"
+                                      })()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <p className="text-sm text-[#4B5563] whitespace-pre-wrap">{review.message}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Total Review Count */}
+                    {totalReviews > 0 && (
+                      <div className="flex items-center justify-between pt-4 border-t border-[#E5E7EB]">
+                        <span className="text-sm text-[#6B7280]">{formatCount(totalReviews)} reviews</span>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           ) : detailTab === "others" ? (
             <div className="mt-5 space-y-4">

@@ -38,6 +38,8 @@ type ListingItem = {
   founded?: string
   industry?: string
   photos?: string[]
+  ceoName?: string
+  ceoPhotoUrl?: string
 }
 
 type ReviewItem = {
@@ -150,6 +152,9 @@ const mapListingData = (doc: any): ListingItem => {
     founded: data.founded != null ? String(data.founded) : "",
     industry: typeof data.industry === "string" ? data.industry : "",
     photos: Array.isArray(data.photos) ? data.photos.filter((url): url is string => typeof url === "string" && url.trim() !== "") : [],
+    locationLink: typeof data.locationLink === "string" ? data.locationLink : "",
+    ceoName: typeof data.ceoName === "string" ? data.ceoName : "",
+    ceoPhotoUrl: typeof data.ceoPhotoUrl === "string" ? data.ceoPhotoUrl : "",
   }
 }
 
@@ -665,6 +670,8 @@ function ListingsPanel({
     founded: "",
     industry: "",
     photos: "",
+    ceoName: "",
+    ceoPhotoUrl: "",
   })
   const [activeFormSection, setActiveFormSection] = useState<"whatsnew" | "reviews" | "about" | "photos" | "others">("whatsnew")
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -710,6 +717,8 @@ function ListingsPanel({
       founded: "",
       industry: "",
       photos: "",
+      ceoName: "",
+      ceoPhotoUrl: "",
     })
     setEditingId(null)
     setFormError(null)
@@ -875,6 +884,12 @@ function ListingsPanel({
       const industry = draft.industry.trim()
       if (industry) listingData.industry = industry
       
+      const ceoName = draft.ceoName.trim()
+      if (ceoName) listingData.ceoName = ceoName
+      
+      const ceoPhotoUrl = draft.ceoPhotoUrl.trim()
+      if (ceoPhotoUrl) listingData.ceoPhotoUrl = ceoPhotoUrl
+      
       // Collect photo URLs
       let photoUrls: string[] = []
 
@@ -981,6 +996,8 @@ function ListingsPanel({
       founded: item.founded || "",
       industry: item.industry || "",
       photos: "",
+      ceoName: item.ceoName || "",
+      ceoPhotoUrl: item.ceoPhotoUrl || "",
     })
     setEditingId(item.id)
     setFormError(null)
@@ -1156,14 +1173,45 @@ function ListingsPanel({
 
           {/* About Section */}
           {activeFormSection === "about" && (
-            <div>
-              <label className="block text-xs text-white/60 mb-2">About</label>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-white/60 mb-2">About</label>
           <Textarea
             value={draft.description}
             onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-                placeholder="Enter description and details..."
-                className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
-              />
+                  placeholder="Enter description and details..."
+                  className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+              
+              {/* CEO Information */}
+              <div className="space-y-3 pt-4 border-t border-white/10">
+                <label className="block text-xs text-white/60 mb-2">CEO Information</label>
+                <Input
+                  value={draft.ceoName}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, ceoName: event.target.value }))}
+                  placeholder="CEO Name"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+                <Input
+                  value={draft.ceoPhotoUrl}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, ceoPhotoUrl: event.target.value }))}
+                  placeholder="CEO Photo URL"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+                {draft.ceoPhotoUrl && (
+                  <div className="mt-2">
+                    <img
+                      src={draft.ceoPhotoUrl}
+                      alt="CEO Preview"
+                      className="h-16 w-16 rounded-full object-cover border border-white/20"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
