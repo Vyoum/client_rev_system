@@ -877,7 +877,7 @@ export default function SearchCommunityPage() {
     : []
 
   return (
-    <div className="min-h-screen bg-white text-[#111827] flex flex-col">
+    <div className="min-h-screen bg-white text-[#111827] flex flex-col scroll-smooth">
       {/* Header */}
       <header className="relative flex items-center justify-center px-4 sm:px-5 pt-8 pb-6 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full">
         {selectedListing ? (

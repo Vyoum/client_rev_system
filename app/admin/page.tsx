@@ -1053,6 +1053,7 @@ function ListingsPanel({
   const [collegeOptions, setCollegeOptions] = useState<Array<{ id: string; name: string; city: string; state: string; status: ListingStatus }>>([])
   const [collegeOptionsLoading, setCollegeOptionsLoading] = useState(false)
   const [collegeSearch, setCollegeSearch] = useState("")
+  const [newCollegeEntries, setNewCollegeEntries] = useState<Array<{ name: string; city: string; state: string }>>([])
   const [seedingCourses, setSeedingCourses] = useState(false)
   const [seedInfo, setSeedInfo] = useState<string | null>(null)
 
@@ -1197,6 +1198,7 @@ function ListingsPanel({
     setPhotoFiles([])
     setUploadProgress({})
     setActiveFormSection("whatsnew")
+    setNewCollegeEntries([])
   }
 
   // Cloudinary upload function
@@ -1295,6 +1297,22 @@ function ListingsPanel({
       const nextCollegeIds = isCoursesForm ? draft.collegeIds.filter((value) => typeof value === "string" && value.trim() !== "") : []
       const previousCollegeIds =
         isCoursesForm && editingId ? (items.find((item) => item.id === editingId)?.collegeIds ?? []) : []
+      const trimmedNewCollegeEntries = isCoursesForm
+        ? newCollegeEntries.map((entry) => ({
+            name: entry.name.trim(),
+            city: entry.city.trim(),
+            state: entry.state.trim(),
+          }))
+        : []
+      const hasInvalidNewCollege = trimmedNewCollegeEntries.some(
+        (entry) => !entry.name && (entry.city || entry.state)
+      )
+      if (hasInvalidNewCollege) {
+        setFormError("Please enter a college name for each added row or remove the empty row.")
+        setSaving(false)
+        return
+      }
+      const newCollegesToCreate = trimmedNewCollegeEntries.filter((entry) => entry.name)
 
       const cityValue = draft.city.trim()
       const stateValue = draft.state.trim()
@@ -1483,6 +1501,31 @@ function ListingsPanel({
         }
       }
 
+      if (isCoursesForm && savedId && newCollegesToCreate.length > 0) {
+        const batch = writeBatch(db)
+        const newCollegeIds: string[] = []
+        newCollegesToCreate.forEach((entry) => {
+          const collegeRef = doc(collection(db, "colleges"))
+          newCollegeIds.push(collegeRef.id)
+          const location = [entry.city, entry.state].filter(Boolean).join(", ")
+          batch.set(collegeRef, {
+            name: entry.name,
+            city: entry.city || "",
+            state: entry.state || "",
+            location,
+            status: "Published",
+            courseIds: [savedId],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          })
+        })
+        batch.update(doc(db, "courses", savedId), {
+          collegeIds: arrayUnion(...newCollegeIds),
+          updatedAt: serverTimestamp(),
+        })
+        await batch.commit()
+      }
+
     resetDraft()
     } catch (error: any) {
       console.error("Error saving listing:", error)
@@ -1532,6 +1575,7 @@ function ListingsPanel({
     setFormError(null)
     setPhotoFiles([])
     setUploadProgress({})
+    setNewCollegeEntries([])
     // Convert photos array to newline-separated string for textarea
     if (item.photos && item.photos.length > 0) {
       setDraft((prev) => ({
@@ -2125,6 +2169,93 @@ function ListingsPanel({
                       })
                     )}
                   </div>
+                </div>
+              )}
+
+              {isCoursesForm && (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-white/70">Add new colleges</p>
+                      <p className="text-[11px] text-white/50">Create as many rows as needed.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNewCollegeEntries((prev) => [...prev, { name: "", city: "", state: "" }])
+                      }
+                      className="h-8 rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
+                      disabled={saving}
+                    >
+                      Add college
+                    </button>
+                  </div>
+                  {newCollegeEntries.length === 0 ? (
+                    <p className="text-xs text-white/50">No new colleges added yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {newCollegeEntries.map((entry, index) => (
+                        <div
+                          key={`new-college-${index}`}
+                          className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto] items-start"
+                        >
+                          <Input
+                            value={entry.name}
+                            onChange={(event) => {
+                              const value = event.target.value
+                              setNewCollegeEntries((prev) =>
+                                prev.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, name: value } : item
+                                )
+                              )
+                            }}
+                            placeholder="College name"
+                            className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                            disabled={saving}
+                          />
+                          <Input
+                            value={entry.city}
+                            onChange={(event) => {
+                              const value = event.target.value
+                              setNewCollegeEntries((prev) =>
+                                prev.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, city: value } : item
+                                )
+                              )
+                            }}
+                            placeholder="City"
+                            className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                            disabled={saving}
+                          />
+                          <Input
+                            value={entry.state}
+                            onChange={(event) => {
+                              const value = event.target.value
+                              setNewCollegeEntries((prev) =>
+                                prev.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, state: value } : item
+                                )
+                              )
+                            }}
+                            placeholder="State"
+                            className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                            disabled={saving}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNewCollegeEntries((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+                            }
+                            className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
+                            aria-label="Remove college row"
+                            disabled={saving}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
