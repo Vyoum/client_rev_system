@@ -2,7 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react"
 import { useEffect, useMemo, useState } from "react"
-import { collection, onSnapshot, orderBy, query, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from "firebase/firestore"
+import { collection, onSnapshot, orderBy, query, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, Timestamp, getDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -175,7 +175,139 @@ export default function AdminPage() {
   const [jobsLoading, setJobsLoading] = useState(true)
   const [companiesLoading, setCompaniesLoading] = useState(true)
   const [coursesLoading, setCoursesLoading] = useState(true)
-  const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews)
+  const [reviews, setReviews] = useState<ReviewItem[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(true)
+
+  // Load reviews from Firestore
+  useEffect(() => {
+    const reviewsRef = collection(db, "reviews")
+    let reviewsQuery
+    try {
+      reviewsQuery = query(reviewsRef, orderBy("createdAt", "desc"))
+    } catch (error) {
+      reviewsQuery = query(reviewsRef)
+    }
+
+    const unsubscribe = onSnapshot(
+      reviewsQuery,
+      async (snapshot) => {
+        // Get all listing IDs from reviews
+        const listingIds = new Set<string>()
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data()
+          if (data.listingId) {
+            listingIds.add(data.listingId)
+          }
+        })
+
+        // Fetch listing names from all collections
+        const listingNames: Record<string, string> = {}
+        const collections = ["feed", "school", "colleges", "kindergarden", "courses"]
+        
+        for (const collectionName of collections) {
+          for (const listingId of listingIds) {
+            if (!listingNames[listingId]) {
+              try {
+                const listingDocRef = doc(db, collectionName, listingId)
+                const listingDoc = await getDoc(listingDocRef)
+                if (listingDoc.exists()) {
+                  listingNames[listingId] = listingDoc.data()?.name || listingId
+                }
+              } catch (error) {
+                // Collection might not have this document, continue
+              }
+            }
+          }
+        }
+
+        const nextReviews = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          const listingId = data.listingId || ""
+          const listingName = listingNames[listingId] || listingId || "Unknown Listing"
+          
+          return {
+            id: doc.id,
+            author: data.authorName || data.author || "Anonymous",
+            rating: typeof data.rating === "number" ? data.rating : 0,
+            message: data.message || "",
+            source: listingId ? listingName : "User Review",
+            status: (data.status || "Visible") as ReviewStatus,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : formatTimestamp(data.createdAt),
+          }
+        })
+        setReviews(nextReviews)
+        setReviewsLoading(false)
+      },
+      (error) => {
+        console.error("Loading reviews failed:", error)
+        if (error.code === "failed-precondition") {
+          const fallbackQuery = query(reviewsRef)
+          const fallbackUnsubscribe = onSnapshot(
+            fallbackQuery,
+            async (snapshot) => {
+              // Get all listing IDs from reviews
+              const listingIds = new Set<string>()
+              snapshot.docs.forEach((doc) => {
+                const data = doc.data()
+                if (data.listingId) {
+                  listingIds.add(data.listingId)
+                }
+              })
+
+              // Fetch listing names from all collections
+              const listingNames: Record<string, string> = {}
+              const collections = ["feed", "school", "colleges", "kindergarden", "courses"]
+              
+              for (const collectionName of collections) {
+                for (const listingId of listingIds) {
+                  if (!listingNames[listingId]) {
+                    try {
+                      const listingDocRef = doc(db, collectionName, listingId)
+                      const listingDoc = await getDoc(listingDocRef)
+                      if (listingDoc.exists()) {
+                        listingNames[listingId] = listingDoc.data()?.name || listingId
+                      }
+                    } catch (error) {
+                      // Collection might not have this document, continue
+                    }
+                  }
+                }
+              }
+
+              const nextReviews = snapshot.docs.map((doc) => {
+                const data = doc.data()
+                const listingId = data.listingId || ""
+                const listingName = listingNames[listingId] || listingId || "Unknown Listing"
+                
+                return {
+                  id: doc.id,
+                  author: data.authorName || data.author || "Anonymous",
+                  rating: typeof data.rating === "number" ? data.rating : 0,
+                  message: data.message || "",
+                  source: listingId ? listingName : "User Review",
+                  status: (data.status || "Visible") as ReviewStatus,
+                  createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : formatTimestamp(data.createdAt),
+                }
+              })
+              setReviews(nextReviews)
+              setReviewsLoading(false)
+            },
+            (fallbackError) => {
+              console.error("Loading reviews failed (fallback):", fallbackError)
+              setReviews([])
+              setReviewsLoading(false)
+            }
+          )
+          return () => fallbackUnsubscribe()
+        } else {
+          setReviews([])
+          setReviewsLoading(false)
+        }
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
 
   // Load users
   useEffect(() => {
@@ -618,7 +750,7 @@ export default function AdminPage() {
             />
           )}
 
-          {activeTab === "reviews" && <ReviewsPanel reviews={reviews} setReviews={setReviews} />}
+          {activeTab === "reviews" && <ReviewsPanel reviews={reviews} setReviews={setReviews} loading={reviewsLoading} />}
         </section>
       </div>
     </div>
@@ -1508,9 +1640,11 @@ function ListingsPanel({
 function ReviewsPanel({
   reviews,
   setReviews,
+  loading,
 }: {
   reviews: ReviewItem[]
   setReviews: Dispatch<SetStateAction<ReviewItem[]>>
+  loading: boolean
 }) {
   const [draft, setDraft] = useState({
     author: "",
@@ -1583,7 +1717,12 @@ function ReviewsPanel({
         </div>
 
         <div className="mt-4 space-y-3">
-          {reviews.map((review) => (
+          {loading ? (
+            <p className="text-sm text-white/60">Loading reviews...</p>
+          ) : reviews.length === 0 ? (
+            <p className="text-sm text-white/60">No reviews yet.</p>
+          ) : (
+            reviews.map((review) => (
             <div
               key={review.id}
               className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -1615,7 +1754,8 @@ function ReviewsPanel({
                 </Button>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
