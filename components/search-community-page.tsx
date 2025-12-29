@@ -1542,7 +1542,7 @@ export default function SearchCommunityPage() {
                 >
                   {tab}
                   <span
-                    className={`absolute left-0 right-0 -bottom-px h-1 bg-orange-500 origin-left transition-transform duration-300 ease-out ${
+                    className={`absolute left-1/2 -translate-x-1/2 -bottom-px h-1 w-[130%] bg-orange-500 origin-left transition-transform duration-300 ease-out ${
                       isActive ? "scale-x-100" : "scale-x-0"
                     }`}
                   />
