@@ -43,6 +43,10 @@ type ListingItem = {
   mission?: string
   vision?: string
   facultyCount?: number | null
+  courseName?: string
+  courseField?: string
+  courseFacultyMembers?: number | null
+  courseStudentsEnrolled?: number | null
 }
 
 type ReviewItem = {
@@ -143,6 +147,10 @@ const mapListingData = (doc: any): ListingItem => {
     mission: typeof data.mission === "string" ? data.mission : "",
     vision: typeof data.vision === "string" ? data.vision : "",
     facultyCount: parseOptionalNumber(data.facultyCount),
+    courseName: typeof data.courseName === "string" ? data.courseName : "",
+    courseField: typeof data.courseField === "string" ? data.courseField : "",
+    courseFacultyMembers: parseOptionalNumber(data.courseFacultyMembers),
+    courseStudentsEnrolled: parseOptionalNumber(data.courseStudentsEnrolled),
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
     createdAt: data.createdAt,
     rating: parseOptionalNumber(data.rating),
@@ -813,6 +821,10 @@ function ListingsPanel({
     mission: "",
     vision: "",
     facultyCount: "",
+    courseName: "",
+    courseField: "",
+    courseFacultyMembers: "",
+    courseStudentsEnrolled: "",
   })
   const [activeFormSection, setActiveFormSection] = useState<"whatsnew" | "reviews" | "about" | "photos" | "others">("whatsnew")
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -823,6 +835,7 @@ function ListingsPanel({
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
   const isCollegesForm = collectionName === "colleges"
+  const isCoursesForm = collectionName === "courses"
 
   const filteredItems = useMemo(() => {
     const query = filterQuery.trim().toLowerCase()
@@ -864,6 +877,10 @@ function ListingsPanel({
       mission: "",
       vision: "",
       facultyCount: "",
+      courseName: "",
+      courseField: "",
+      courseFacultyMembers: "",
+      courseStudentsEnrolled: "",
     })
     setEditingId(null)
     setFormError(null)
@@ -985,6 +1002,18 @@ function ListingsPanel({
       // Add Others field
       const others = draft.others.trim()
       if (others) listingData.others = others
+
+      const courseName = draft.courseName.trim()
+      if (courseName) listingData.courseName = courseName
+
+      const courseField = draft.courseField.trim()
+      if (courseField) listingData.courseField = courseField
+
+      const courseFacultyMembers = parseOptionalNumber(draft.courseFacultyMembers)
+      if (courseFacultyMembers !== null) listingData.courseFacultyMembers = courseFacultyMembers
+
+      const courseStudentsEnrolled = parseOptionalNumber(draft.courseStudentsEnrolled)
+      if (courseStudentsEnrolled !== null) listingData.courseStudentsEnrolled = courseStudentsEnrolled
 
       // Add Mission field
       const mission = draft.mission.trim()
@@ -1158,6 +1187,10 @@ function ListingsPanel({
       mission: item.mission || "",
       vision: item.vision || "",
       facultyCount: item.facultyCount != null ? String(item.facultyCount) : "",
+      courseName: item.courseName || "",
+      courseField: item.courseField || "",
+      courseFacultyMembers: item.courseFacultyMembers != null ? String(item.courseFacultyMembers) : "",
+      courseStudentsEnrolled: item.courseStudentsEnrolled != null ? String(item.courseStudentsEnrolled) : "",
     })
     setEditingId(item.id)
     setFormError(null)
@@ -1644,6 +1677,40 @@ function ListingsPanel({
           {activeFormSection === "others" && (
             <div className="space-y-3 w-full">
               <label className="block text-xs text-white/60 mb-2">Courses</label>
+              {isCoursesForm && (
+                <div className="space-y-3">
+                  <Input
+                    value={draft.courseName}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, courseName: event.target.value }))}
+                    placeholder="Course name"
+                    className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                  />
+                  <Input
+                    value={draft.courseField}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, courseField: event.target.value }))}
+                    placeholder="Course field"
+                    className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                  />
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.courseFacultyMembers}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, courseFacultyMembers: event.target.value }))}
+                      placeholder="Faculty members"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.courseStudentsEnrolled}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, courseStudentsEnrolled: event.target.value }))}
+                      placeholder="Students currently enrolled"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                  </div>
+                </div>
+              )}
               <Textarea
                 value={draft.others}
                 onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
@@ -1688,19 +1755,13 @@ function ListingsPanel({
                   className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
                 />
               </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+              <div className="grid gap-3 grid-cols-1 w-full">
                 <Input
                   type="number"
                   min="0"
                   value={draft.locationsCount}
                   onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
                   placeholder="Locations count"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-                <Input
-                  value={draft.employeeCount}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, employeeCount: event.target.value }))}
-                  placeholder="Employee count"
                   className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
                 />
               </div>

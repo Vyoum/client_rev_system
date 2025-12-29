@@ -39,6 +39,11 @@ type ListingItem = {
   founded?: string
   industry?: string
   locationsCount?: number | null
+  others?: string
+  courseName?: string
+  courseField?: string
+  courseFacultyMembers?: number | null
+  courseStudentsEnrolled?: number | null
   mission?: string
   vision?: string
   facultyCount?: number | null
@@ -597,6 +602,10 @@ export default function SearchCommunityPage() {
               photos: Array.isArray(data.photos) ? data.photos.filter((url): url is string => typeof url === "string" && url.trim() !== "") : [],
               whatsNew: typeof data.whatsNew === "string" ? data.whatsNew : "",
               others: typeof data.others === "string" ? data.others : "",
+              courseName: typeof data.courseName === "string" ? data.courseName : "",
+              courseField: typeof data.courseField === "string" ? data.courseField : "",
+              courseFacultyMembers: parseNumber(data.courseFacultyMembers),
+              courseStudentsEnrolled: parseNumber(data.courseStudentsEnrolled),
               ceoName: typeof data.ceoName === "string" ? data.ceoName : "",
               ceoPhotoUrl: typeof data.ceoPhotoUrl === "string" ? data.ceoPhotoUrl : "",
             }
@@ -689,6 +698,18 @@ export default function SearchCommunityPage() {
           ? `${formatCount(selectedListing.locationsCount)} Locations`
           : null,
         selectedListing.industry || null,
+      ].filter((line): line is string => Boolean(line))
+    : []
+  const courseDetails = selectedListing
+    ? [
+        selectedListing.courseName ? `Course name: ${selectedListing.courseName}` : null,
+        selectedListing.courseField ? `Course field: ${selectedListing.courseField}` : null,
+        typeof selectedListing.courseFacultyMembers === "number"
+          ? `Faculty members: ${selectedListing.courseFacultyMembers.toLocaleString()}`
+          : null,
+        typeof selectedListing.courseStudentsEnrolled === "number"
+          ? `Students currently enrolled: ${selectedListing.courseStudentsEnrolled.toLocaleString()}`
+          : null,
       ].filter((line): line is string => Boolean(line))
     : []
 
@@ -1141,11 +1162,19 @@ export default function SearchCommunityPage() {
           ) : detailTab === "others" ? (
             <div className="mt-5 space-y-4">
               <div className="rounded-xl border border-[#E5E7EB] bg-white p-6">
-                <h3 className="text-lg font-semibold text-[#111827] mb-4">Additional Information</h3>
-                <div className="space-y-3 text-sm text-[#4B5563]">
-                  <p>This section contains additional information and details about this listing.</p>
-                  <p className="text-[#6B7280]">More details will be added here in the future.</p>
-                </div>
+                <h3 className="text-lg font-semibold text-[#111827] mb-4">Course details</h3>
+                {courseDetails.length > 0 ? (
+                  <div className="space-y-2 text-sm text-[#4B5563]">
+                    {courseDetails.map((line) => (
+                      <p key={line}>{line}</p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6B7280]">No course details available yet.</p>
+                )}
+                {selectedListing.others && (
+                  <p className="mt-4 text-sm text-[#4B5563]">{selectedListing.others}</p>
+                )}
               </div>
             </div>
           ) : (
