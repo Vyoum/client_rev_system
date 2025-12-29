@@ -4,16 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ExternalLink, User, MoreVertical, ThumbsUp } from "lucide-react"
 import { INDIA_LOCATIONS } from "../data/india-locations"
 import SignInModal from "./sign-in-modal"
+import Footer from "./footer"
 import { collection, query, onSnapshot, Timestamp, addDoc, serverTimestamp, where, orderBy, updateDoc, doc, arrayUnion, arrayRemove, increment } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 
-const tabs = ["Feed", "Colleges", "School", "Kindergarden", "Courses"]
+const tabs = ["Feeds", "Colleges", "School", "Kindergarden", "Courses"]
 const detailTabs = [
   { id: "whatsnew", label: "What's New" },
   { id: "reviews", label: "Reviews" },
   { id: "about", label: "About" },
   { id: "photos", label: "Photos" },
-  { id: "others", label: "Others" },
+  { id: "others", label: "Courses" },
 ] as const
 
 type ListingItem = {
@@ -58,7 +59,7 @@ type ReviewItem = {
 
 const getCollectionName = (tab: string): string => {
   const tabMap: Record<string, string> = {
-    Feed: "feed",
+    Feeds: "feed",
     School: "school",
     Colleges: "colleges",
     Kindergarden: "kindergarden",
@@ -68,7 +69,7 @@ const getCollectionName = (tab: string): string => {
 }
 
 export default function SearchCommunityPage() {
-  const [activeTab, setActiveTab] = useState("Feed")
+  const [activeTab, setActiveTab] = useState("Feeds")
   const [searchQuery, setSearchQuery] = useState("")
   const [locationValue, setLocationValue] = useState("")
   const [locationQuery, setLocationQuery] = useState("")
@@ -677,7 +678,7 @@ export default function SearchCommunityPage() {
           <button
             type="button"
             onClick={handleCloseListing}
-            className="absolute left-4 top-8 flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] transition-colors z-10 shadow-sm"
+            className="absolute left-4 top-8 flex h-9 w-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] transition-colors z-10 shadow-sm"
             aria-label="Back to results"
           >
             <ChevronLeft className="h-5 w-5 text-[#111827]" />
@@ -706,7 +707,7 @@ export default function SearchCommunityPage() {
                   loading="lazy"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-base font-semibold text-[#111827]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-base font-semibold text-[#111827]">
                   {getInitials(selectedListing.name)}
                 </div>
               )}
@@ -729,7 +730,7 @@ export default function SearchCommunityPage() {
             </div>
             <button
               type="button"
-              className="rounded-full border border-[#D1D5DB] px-5 py-2 text-sm font-semibold text-[#111827] hover:bg-[#F3F4F6] transition-colors"
+              className="rounded-full border border-[#D1D5DB] px-5 py-2 text-sm font-semibold text-[#111827] hover:bg-[#F9FAFB] transition-colors"
             >
               Follow
             </button>
@@ -757,7 +758,7 @@ export default function SearchCommunityPage() {
 
           {detailTab === "whatsnew" ? (
             <div className="mt-5 space-y-4">
-              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-6">
+              <div className="rounded-xl border border-[#E5E7EB] bg-white p-6">
                 <h3 className="text-lg font-semibold text-[#111827] mb-4">What's New</h3>
                 <div className="space-y-3 text-sm text-[#4B5563]">
                   <p>Stay updated with the latest news and updates about this listing.</p>
@@ -995,7 +996,7 @@ export default function SearchCommunityPage() {
                               const likeCount = review.likes || 0
                               
                               return (
-                                <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                                <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-white p-4">
                                   <div className="flex items-start gap-2 mb-2">
                                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
                                       {review.authorName.charAt(0).toUpperCase()}
@@ -1057,7 +1058,7 @@ export default function SearchCommunityPage() {
                                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
                                         isLiked
                                           ? "bg-orange-500/10 text-orange-500"
-                                          : "bg-gray-100 text-[#6B7280] hover:bg-gray-200"
+                                          : "bg-white border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
                                       }`}
                                     >
                                       <ThumbsUp className={`h-4 w-4 ${isLiked ? "fill-current" : ""}`} />
@@ -1084,7 +1085,7 @@ export default function SearchCommunityPage() {
             </div>
           ) : detailTab === "others" ? (
             <div className="mt-5 space-y-4">
-              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-6">
+              <div className="rounded-xl border border-[#E5E7EB] bg-white p-6">
                 <h3 className="text-lg font-semibold text-[#111827] mb-4">Additional Information</h3>
                 <div className="space-y-3 text-sm text-[#4B5563]">
                   <p>This section contains additional information and details about this listing.</p>
@@ -1349,7 +1350,7 @@ export default function SearchCommunityPage() {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-sm font-semibold text-[#111827]">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-sm font-semibold text-[#111827]">
                             {getInitials(listing.name)}
                           </div>
                         )}
@@ -1442,6 +1443,9 @@ export default function SearchCommunityPage() {
           </div>
         </div>
       )}
+      
+      {/* Footer */}
+      <Footer />
     </div>
   )
 }

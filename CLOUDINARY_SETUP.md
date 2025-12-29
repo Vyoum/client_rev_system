@@ -69,3 +69,4 @@ The current setup uses **unsigned uploads** which means the upload preset is pub
 - **Images not showing**: Verify the URLs are being saved correctly to Firestore
 
 
+

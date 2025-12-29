@@ -40,6 +40,9 @@ type ListingItem = {
   photos?: string[]
   ceoName?: string
   ceoPhotoUrl?: string
+  mission?: string
+  vision?: string
+  facultyCount?: number | null
 }
 
 type ReviewItem = {
@@ -63,7 +66,7 @@ type UserRecord = {
 
 const tabs = [
   { id: "users", label: "Users" },
-  { id: "schools", label: "Feed" },
+  { id: "schools", label: "Feeds" },
   { id: "jobs", label: "Colleges" },
   { id: "colleges", label: "School" },
   { id: "companies", label: "Kindergarden" },
@@ -137,6 +140,9 @@ const mapListingData = (doc: any): ListingItem => {
     description: data.description || "",
     whatsNew: typeof data.whatsNew === "string" ? data.whatsNew : "",
     others: typeof data.others === "string" ? data.others : "",
+    mission: typeof data.mission === "string" ? data.mission : "",
+    vision: typeof data.vision === "string" ? data.vision : "",
+    facultyCount: parseOptionalNumber(data.facultyCount),
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
     createdAt: data.createdAt,
     rating: parseOptionalNumber(data.rating),
@@ -634,7 +640,7 @@ export default function AdminPage() {
   const hiddenReviews = reviews.filter((review) => review.status === "Hidden").length
 
   const listingConfigMap: Record<ListingTabId, { label: string; items: ListingItem[]; setItems: Dispatch<SetStateAction<ListingItem[]>>; collectionName: string; loading: boolean }> = {
-    schools: { label: "Feed", items: schools, setItems: setSchools, collectionName: "feed", loading: schoolsLoading },
+    schools: { label: "Feeds", items: schools, setItems: setSchools, collectionName: "feed", loading: schoolsLoading },
     colleges: { label: "School", items: colleges, setItems: setColleges, collectionName: "school", loading: collegesLoading },
     jobs: { label: "Colleges", items: jobs, setItems: setJobs, collectionName: "colleges", loading: jobsLoading },
     companies: { label: "Kindergarden", items: companies, setItems: setCompanies, collectionName: "kindergarden", loading: companiesLoading },
@@ -804,6 +810,9 @@ function ListingsPanel({
     photos: "",
     ceoName: "",
     ceoPhotoUrl: "",
+    mission: "",
+    vision: "",
+    facultyCount: "",
   })
   const [activeFormSection, setActiveFormSection] = useState<"whatsnew" | "reviews" | "about" | "photos" | "others">("whatsnew")
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -851,6 +860,9 @@ function ListingsPanel({
       photos: "",
       ceoName: "",
       ceoPhotoUrl: "",
+      mission: "",
+      vision: "",
+      facultyCount: "",
     })
     setEditingId(null)
     setFormError(null)
@@ -972,6 +984,18 @@ function ListingsPanel({
       // Add Others field
       const others = draft.others.trim()
       if (others) listingData.others = others
+
+      // Add Mission field
+      const mission = draft.mission.trim()
+      if (mission) listingData.mission = mission
+
+      // Add Vision field
+      const vision = draft.vision.trim()
+      if (vision) listingData.vision = vision
+
+      // Add Faculty Count field
+      const facultyCount = parseOptionalNumber(draft.facultyCount)
+      if (facultyCount !== null) listingData.facultyCount = facultyCount
 
       // Only add optional fields if they have values
       if (stateValue) listingData.state = stateValue
@@ -1130,6 +1154,9 @@ function ListingsPanel({
       photos: "",
       ceoName: item.ceoName || "",
       ceoPhotoUrl: item.ceoPhotoUrl || "",
+      mission: item.mission || "",
+      vision: item.vision || "",
+      facultyCount: item.facultyCount != null ? String(item.facultyCount) : "",
     })
     setEditingId(item.id)
     setFormError(null)
@@ -1315,6 +1342,52 @@ function ListingsPanel({
                   className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
                 />
               </div>
+
+              {/* Mission */}
+              <div className="pt-4 border-t border-white/10">
+                <label className="block text-xs text-white/60 mb-2">Mission</label>
+                <Textarea
+                  value={draft.mission}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, mission: event.target.value }))}
+                  placeholder="Enter mission statement..."
+                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
+              {/* Vision */}
+              <div className="pt-4 border-t border-white/10">
+                <label className="block text-xs text-white/60 mb-2">Vision</label>
+                <Textarea
+                  value={draft.vision}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, vision: event.target.value }))}
+                  placeholder="Enter vision statement..."
+                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
+              {/* Total Number of Faculty */}
+              <div className="pt-4 border-t border-white/10">
+                <label className="block text-xs text-white/60 mb-2">Total Number of Faculty</label>
+                <Input
+                  type="number"
+                  value={draft.facultyCount}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, facultyCount: event.target.value }))}
+                  placeholder="Enter total number of faculty"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
+              {/* Founded In */}
+              <div className="pt-4 border-t border-white/10">
+                <label className="block text-xs text-white/60 mb-2">Founded In</label>
+                <Input
+                  type="text"
+                  value={draft.founded}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
+                  placeholder="Enter founding year (e.g., 1995)"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
               
               {/* CEO Information */}
               <div className="space-y-3 pt-4 border-t border-white/10">
@@ -1492,10 +1565,10 @@ function ListingsPanel({
             </div>
           )}
 
-          {/* Others Section */}
+          {/* Courses Section */}
           {activeFormSection === "others" && (
             <div className="space-y-3 w-full">
-              <label className="block text-xs text-white/60 mb-2">Others</label>
+              <label className="block text-xs text-white/60 mb-2">Courses</label>
               <Textarea
                 value={draft.others}
                 onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
