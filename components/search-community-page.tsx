@@ -39,6 +39,9 @@ type ListingItem = {
   founded?: string
   industry?: string
   locationsCount?: number | null
+  mission?: string
+  vision?: string
+  facultyCount?: number | null
   photos?: string[]
   ceoName?: string
   ceoPhotoUrl?: string
@@ -564,11 +567,14 @@ export default function SearchCommunityPage() {
         const nextListings = snapshot.docs
           .map((doc) => {
             const data = doc.data()
+            const city = typeof data.city === "string" ? data.city : ""
+            const state = typeof data.state === "string" ? data.state : ""
             return {
               id: doc.id,
               name: data.name || "",
-              state: data.state || "",
-              city: data.city || "",
+              location: typeof data.location === "string" ? data.location : "",
+              state,
+              city,
               status: data.status || "Draft",
               description: data.description || "",
               updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
@@ -585,6 +591,9 @@ export default function SearchCommunityPage() {
               founded: data.founded != null ? String(data.founded) : "",
               industry: typeof data.industry === "string" ? data.industry : "",
               locationsCount: parseNumber(data.locationsCount ?? data.locations),
+              mission: typeof data.mission === "string" ? data.mission : "",
+              vision: typeof data.vision === "string" ? data.vision : "",
+              facultyCount: parseNumber(data.facultyCount),
               photos: Array.isArray(data.photos) ? data.photos.filter((url): url is string => typeof url === "string" && url.trim() !== "") : [],
               whatsNew: typeof data.whatsNew === "string" ? data.whatsNew : "",
               others: typeof data.others === "string" ? data.others : "",
@@ -656,16 +665,29 @@ export default function SearchCommunityPage() {
   }, [listings, searchQuery, selectedState, selectedCity])
 
   const detailLocation = selectedListing ? getListingLocation(selectedListing) : ""
-  const aboutLines = selectedListing
+  const hasDetailLocation = detailLocation && detailLocation !== "Location not specified"
+  const locationHref = selectedListing?.locationLink
+    ? normalizeUrl(selectedListing.locationLink)
+    : hasDetailLocation
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(detailLocation)}`
+      : ""
+  const locationLabel = hasDetailLocation ? detailLocation : "View location"
+  const primaryAboutLines = selectedListing
+    ? [
+        selectedListing.founded ? `Founded in: ${selectedListing.founded}` : null,
+        typeof selectedListing.facultyCount === "number"
+          ? `Total number of faculty: ${selectedListing.facultyCount.toLocaleString()}`
+          : null,
+      ].filter((line): line is string => Boolean(line))
+    : []
+  const secondaryAboutLines = selectedListing
     ? [
         selectedListing.employeeCount ? `${selectedListing.employeeCount} Employees` : null,
         selectedListing.type ? `Type: ${selectedListing.type}` : null,
         selectedListing.revenue ? `Revenue: ${selectedListing.revenue}` : null,
-        detailLocation || null,
         typeof selectedListing.locationsCount === "number"
           ? `${formatCount(selectedListing.locationsCount)} Locations`
           : null,
-        selectedListing.founded ? `Founded in ${selectedListing.founded}` : null,
         selectedListing.industry || null,
       ].filter((line): line is string => Boolean(line))
     : []
@@ -779,31 +801,64 @@ export default function SearchCommunityPage() {
                   <ExternalLink className="h-4 w-4" />
                 </a>
               )}
-              {selectedListing.locationLink && (
-                <a
-                  href={normalizeUrl(selectedListing.locationLink)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-orange-500 hover:text-orange-600"
-                >
-                  View on Maps
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              )}
 
-              {aboutLines.length > 0 ? (
+              {primaryAboutLines.length > 0 && (
                 <div className="space-y-2 text-sm text-[#111827]">
-                  {aboutLines.map((line) => (
+                  {primaryAboutLines.map((line) => (
                     <p key={line}>{line}</p>
                   ))}
                 </div>
-              ) : (
-                <p className="text-sm text-[#6B7280]">No details available yet.</p>
+              )}
+
+              {locationHref && (
+                <p className="text-sm text-[#111827]">
+                  Location:{" "}
+                  <a
+                    href={locationHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-orange-500 hover:text-orange-600"
+                  >
+                    {locationLabel}
+                  </a>
+                </p>
+              )}
+
+              {selectedListing.mission && (
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-[#111827]">Mission</p>
+                  <p className="text-sm text-[#4B5563]">{selectedListing.mission}</p>
+                </div>
+              )}
+
+              {selectedListing.vision && (
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-[#111827]">Vision</p>
+                  <p className="text-sm text-[#4B5563]">{selectedListing.vision}</p>
+                </div>
+              )}
+
+              {secondaryAboutLines.length > 0 && (
+                <div className="space-y-2 text-sm text-[#111827]">
+                  {secondaryAboutLines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
               )}
 
               {selectedListing.description && (
                 <p className="text-sm text-[#4B5563]">{selectedListing.description}</p>
               )}
+
+              {!selectedListing.website &&
+                primaryAboutLines.length === 0 &&
+                secondaryAboutLines.length === 0 &&
+                !locationHref &&
+                !selectedListing.mission &&
+                !selectedListing.vision &&
+                !selectedListing.description && (
+                  <p className="text-sm text-[#6B7280]">No details available yet.</p>
+                )}
             </div>
           ) : detailTab === "reviews" ? (
             <div className="mt-5 space-y-8">
@@ -1518,7 +1573,8 @@ const normalizeUrl = (value: string) => {
 }
 
 const getListingLocation = (listing: ListingItem) => {
-  // Use city and state fields only
   const parts = [listing.city, listing.state].filter(Boolean)
-  return parts.length > 0 ? parts.join(", ") : "Location not specified"
+  if (parts.length > 0) return parts.join(", ")
+  const fallbackLocation = listing.location?.trim()
+  return fallbackLocation ? fallbackLocation : "Location not specified"
 }
