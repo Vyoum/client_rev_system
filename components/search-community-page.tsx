@@ -1,12 +1,29 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ExternalLink, User, MoreVertical, ThumbsUp } from "lucide-react"
+import { ChevronLeft, ChevronRight, ExternalLink, User, MoreVertical, ThumbsUp } from "lucide-react"
 import { INDIA_LOCATIONS } from "../data/india-locations"
 import SignInModal from "./sign-in-modal"
 import Footer from "./footer"
-import { collection, query, onSnapshot, Timestamp, addDoc, serverTimestamp, where, orderBy, updateDoc, doc, arrayUnion, arrayRemove, increment } from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
+import {
+  arrayRemove,
+  arrayUnion,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  where,
+  writeBatch,
+  increment,
+  addDoc,
+} from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
+import { INDIA_COURSES } from "@/data/india-courses"
 
 const tabs = ["Feeds", "Colleges", "School", "Kindergarden", "Courses"]
 const detailTabs = [
@@ -65,6 +82,14 @@ type ReviewItem = {
   likedBy?: string[] // Array of user IDs who liked this review
 }
 
+type CollegeSummary = {
+  id: string
+  name: string
+  city?: string
+  state?: string
+  status?: "Draft" | "Published"
+}
+
 const getCollectionName = (tab: string): string => {
   const tabMap: Record<string, string> = {
     Feeds: "feed",
@@ -102,9 +127,19 @@ export default function SearchCommunityPage() {
   const [reportingReviewId, setReportingReviewId] = useState<string | null>(null)
   const [reportReason, setReportReason] = useState("")
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null)
+  const [expandedCourseColleges, setExpandedCourseColleges] = useState<CollegeSummary[]>([])
+  const [expandedCourseCollegesLoading, setExpandedCourseCollegesLoading] = useState(false)
+  const [expandedCourseCollegesError, setExpandedCourseCollegesError] = useState<string | null>(null)
+  const [coursesSeeding, setCoursesSeeding] = useState(false)
+  const [coursesSeedError, setCoursesSeedError] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState(() => auth.currentUser)
   const locationRef = useRef<HTMLDivElement>(null)
   const citiesRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const coursesSeededRef = useRef(false)
+  const coursesSeedingRef = useRef(false)
+  const isSignedIn = Boolean(currentUser)
 
   const filteredStates = useMemo(() => {
     const query = locationQuery.trim().toLowerCase()
@@ -163,6 +198,20 @@ export default function SearchCommunityPage() {
     }
     handleStatePreview(state)
   }
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!isSignedIn && activeTab !== "Feeds") {
+      setActiveTab("Feeds")
+    }
+  }, [activeTab, isSignedIn])
 
   const handleOpenListing = (listing: ListingItem) => {
     setSelectedListing(listing)
@@ -556,6 +605,39 @@ export default function SearchCommunityPage() {
     return () => document.removeEventListener("mousedown", handleOutsideClick)
   }, [])
 
+  const seedIndiaCourses = async () => {
+    if (coursesSeedingRef.current || coursesSeededRef.current) return
+    coursesSeedingRef.current = true
+    setCoursesSeeding(true)
+    setCoursesSeedError(null)
+    try {
+      const batch = writeBatch(db)
+      INDIA_COURSES.forEach((course) => {
+        const ref = doc(collection(db, "courses"))
+        batch.set(ref, {
+          name: course.courseName,
+          courseName: course.courseName,
+          courseField: course.courseField,
+          status: "Published",
+          description: "",
+          others: "",
+          collegeIds: [],
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        })
+      })
+      await batch.commit()
+      coursesSeededRef.current = true
+    } catch (error) {
+      console.error("Auto-seeding courses failed:", error)
+      setCoursesSeedError("Unable to load courses right now. Please try again later.")
+      coursesSeededRef.current = true
+    } finally {
+      coursesSeedingRef.current = false
+      setCoursesSeeding(false)
+    }
+  }
+
   // Load listings from Firestore based on active tab
   useEffect(() => {
     const collectionName = getCollectionName(activeTab)
@@ -619,6 +701,15 @@ export default function SearchCommunityPage() {
           })
         setListings(nextListings)
         setListingsLoading(false)
+
+        if (activeTab === "Courses") {
+          if (snapshot.empty && !coursesSeededRef.current && !coursesSeedingRef.current) {
+            void seedIndiaCourses()
+          } else if (!snapshot.empty) {
+            coursesSeededRef.current = true
+            setCoursesSeedError(null)
+          }
+        }
         
         // Load reviews for all listings to calculate average ratings
         if (nextListings.length > 0) {
@@ -636,9 +727,81 @@ export default function SearchCommunityPage() {
     return () => unsubscribe()
   }, [activeTab])
 
+  useEffect(() => {
+    if (activeTab !== "Courses") {
+      setExpandedCourseId(null)
+      setExpandedCourseColleges([])
+      setExpandedCourseCollegesLoading(false)
+      setExpandedCourseCollegesError(null)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab !== "Courses" || !expandedCourseId) {
+      setExpandedCourseColleges([])
+      setExpandedCourseCollegesLoading(false)
+      setExpandedCourseCollegesError(null)
+      return
+    }
+
+    setExpandedCourseCollegesLoading(true)
+    setExpandedCourseCollegesError(null)
+    setExpandedCourseColleges([])
+
+    const collegesRef = collection(db, "colleges")
+    const collegesQuery = query(collegesRef, where("courseIds", "array-contains", expandedCourseId))
+
+    const unsubscribe = onSnapshot(
+      collegesQuery,
+      (snapshot) => {
+        const nextColleges: CollegeSummary[] = snapshot.docs
+          .map((doc) => {
+            const data = doc.data() as Record<string, unknown>
+            return {
+              id: doc.id,
+              name: typeof data.name === "string" ? data.name : "",
+              city: typeof data.city === "string" ? data.city : "",
+              state: typeof data.state === "string" ? data.state : "",
+              status: (typeof data.status === "string" ? (data.status as "Draft" | "Published") : "Draft") ?? "Draft",
+            }
+          })
+          .filter((college) => college.status === "Published")
+          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+        setExpandedCourseColleges(nextColleges)
+        setExpandedCourseCollegesLoading(false)
+      },
+      (error) => {
+        console.error("Error loading course colleges:", error)
+        setExpandedCourseColleges([])
+        setExpandedCourseCollegesLoading(false)
+        setExpandedCourseCollegesError(error?.message ?? "Unable to load colleges for this course.")
+      }
+    )
+
+    return () => unsubscribe()
+  }, [activeTab, expandedCourseId])
+
   // Filter listings based on search query and location
   const filteredListings = useMemo(() => {
     let filtered = listings
+
+    if (activeTab === "Courses") {
+      if (searchQuery.trim()) {
+        const query = searchQuery.trim().toLowerCase()
+        filtered = filtered.filter((listing) => {
+          const courseName = (listing.courseName || listing.name || "").toLowerCase()
+          const courseField = (listing.courseField || "").toLowerCase()
+          const description = (listing.description || "").toLowerCase()
+          const extra = (listing.others || "").toLowerCase()
+          return courseName.includes(query) || courseField.includes(query) || description.includes(query) || extra.includes(query)
+        })
+      }
+      return filtered
+        .slice()
+        .sort((a, b) =>
+          (a.courseName || a.name || "").localeCompare(b.courseName || b.name || "", "en", { sensitivity: "base" })
+        )
+    }
 
     // Filter by search query - using city and state fields only
     if (searchQuery.trim()) {
@@ -671,7 +834,7 @@ export default function SearchCommunityPage() {
     }
 
     return filtered
-  }, [listings, searchQuery, selectedState, selectedCity])
+  }, [listings, searchQuery, selectedState, selectedCity, activeTab])
 
   const detailLocation = selectedListing ? getListingLocation(selectedListing) : ""
   const hasDetailLocation = detailLocation && detailLocation !== "Location not specified"
@@ -1357,20 +1520,33 @@ export default function SearchCommunityPage() {
         {/* Tab Navigation */}
         <nav className="mt-6 border-b border-[#E5E7EB]">
           <div className="flex items-end justify-between gap-4">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`relative pb-3 text-[15px] whitespace-nowrap transition-colors ${
-                  activeTab === tab ? "text-[#111827] font-semibold" : "text-[#6B7280] font-medium"
-                }`}
-              >
-                {tab}
-                {activeTab === tab && (
-                  <div className="absolute left-0 right-0 -bottom-px h-1 bg-orange-500" />
-                )}
-              </button>
-            ))}
+            {tabs.map((tab) => {
+              const isLocked = !isSignedIn && tab !== "Feeds"
+              const isActive = activeTab === tab && !isLocked
+
+              return (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    if (isLocked) {
+                      setIsSignInOpen(true)
+                      return
+                    }
+                    setActiveTab(tab)
+                  }}
+                  className={`relative pb-3 text-[15px] whitespace-nowrap transition-colors ${
+                    isActive ? "text-[#111827] font-semibold" : "text-[#6B7280] font-medium"
+                  } ${isLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                  aria-disabled={isLocked}
+                  title={isLocked ? "Sign in to access this section" : undefined}
+                >
+                  {tab}
+                  {isActive && (
+                    <div className="absolute left-0 right-0 -bottom-px h-1 bg-orange-500" />
+                  )}
+                </button>
+              )
+            })}
           </div>
         </nav>
       </div>
@@ -1395,108 +1571,223 @@ export default function SearchCommunityPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-[#6B7280]">
-              Found {filteredListings.length} {filteredListings.length === 1 ? "listing" : "listings"}
-            </p>
-            <div className="rounded-2xl border border-[#E5E7EB] bg-white">
-              <ul className="divide-y divide-[#E5E7EB]">
-                {filteredListings.map((listing) => {
-                  // Get calculated rating from user reviews (preferred over admin rating)
-                  const calculatedRating = calculatedRatings[listing.id]
-                  const displayRating = calculatedRating?.average ?? null
-                  const reviewCount = calculatedRating?.count ?? 0
-                  
-                  // Build stats parts (excluding reviews, which will be shown with rating)
-                  const statsParts: string[] = []
-                  if (typeof listing.jobsCount === "number") {
-                    statsParts.push(`${formatCount(listing.jobsCount)} jobs`)
-                  }
-                  if (typeof listing.salariesCount === "number") {
-                    statsParts.push(`${formatCount(listing.salariesCount)} salaries`)
-                  }
-                  
-                  const locationDisplay = [listing.city, listing.state].filter(Boolean).join(", ") || "Location not specified"
-                  const hasLocationDisplay = locationDisplay !== "Location not specified"
-                  const locationHref = listing.locationLink
-                    ? normalizeUrl(listing.locationLink)
-                    : hasLocationDisplay
-                      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationDisplay)}`
-                      : ""
-                  const showDescription = !displayRating && statsParts.length === 0 && listing.description
+          activeTab === "Courses" ? (
+            <div className="space-y-4">
+              <p className="text-sm text-[#6B7280]">
+                Found {filteredListings.length} {filteredListings.length === 1 ? "course" : "courses"}
+              </p>
+              {coursesSeeding && filteredListings.length === 0 && (
+                <p className="text-sm text-[#6B7280]">Loading the India courses catalog...</p>
+              )}
+              {coursesSeedError && filteredListings.length === 0 && (
+                <p className="text-sm text-red-600">{coursesSeedError}</p>
+              )}
 
-                  return (
-                    <li key={listing.id}>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenListing(listing)}
-                        className="flex w-full gap-4 px-5 py-4 text-left transition-colors hover:bg-[#F9FAFB]"
-                      >
-                        {listing.logoUrl ? (
-                          <img
-                            src={listing.logoUrl}
-                            alt={listing.name}
-                            className="h-12 w-12 rounded-full border border-[#E5E7EB] object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-sm font-semibold text-[#111827]">
-                            {getInitials(listing.name)}
+              <div className="rounded-2xl border border-[#E5E7EB] bg-white overflow-hidden">
+                <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 px-5 py-3 text-xs font-semibold text-[#6B7280] bg-[#F9FAFB]">
+                  <span>Course</span>
+                  <span>Field</span>
+                  <span>Faculty</span>
+                  <span>Enrolled</span>
+                  <span />
+                </div>
+
+                <div className="divide-y divide-[#E5E7EB]">
+                  {filteredListings.map((course) => {
+                    const courseName = course.courseName || course.name || "Untitled course"
+                    const courseField = course.courseField || "—"
+                    const facultyMembers =
+                      typeof course.courseFacultyMembers === "number"
+                        ? course.courseFacultyMembers.toLocaleString()
+                        : "—"
+                    const studentsEnrolled =
+                      typeof course.courseStudentsEnrolled === "number"
+                        ? course.courseStudentsEnrolled.toLocaleString()
+                        : "—"
+                    const isExpanded = expandedCourseId === course.id
+
+                    return (
+                      <div key={course.id}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCourseId((prev) => (prev === course.id ? null : course.id))}
+                          className="w-full px-5 py-4 text-left transition-colors hover:bg-[#F9FAFB]"
+                        >
+                          <div className="flex items-start gap-3 sm:hidden">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-base font-semibold text-[#111827] truncate">{courseName}</p>
+                              <p className="mt-1 text-sm text-[#6B7280]">
+                                {courseField}
+                                {(facultyMembers !== "—" || studentsEnrolled !== "—") && " · "}
+                                {facultyMembers !== "—" ? `${facultyMembers} faculty` : null}
+                                {facultyMembers !== "—" && studentsEnrolled !== "—" ? " · " : null}
+                                {studentsEnrolled !== "—" ? `${studentsEnrolled} enrolled` : null}
+                              </p>
+                            </div>
+                            <ChevronRight
+                              className={`mt-0.5 h-5 w-5 text-orange-500 transition-transform ${
+                                isExpanded ? "rotate-90" : ""
+                              }`}
+                            />
+                          </div>
+
+                          <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 items-center">
+                            <span className="text-sm font-semibold text-[#111827]">{courseName}</span>
+                            <span className="text-sm text-[#6B7280]">{courseField}</span>
+                            <span className="text-sm text-[#111827]">{facultyMembers}</span>
+                            <span className="text-sm text-[#111827]">{studentsEnrolled}</span>
+                            <ChevronRight
+                              className={`h-5 w-5 text-orange-500 transition-transform justify-self-end ${
+                                isExpanded ? "rotate-90" : ""
+                              }`}
+                            />
+                          </div>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-5 pb-5 pt-1 bg-orange-50/60">
+                            <p className="mt-3 text-xs font-semibold text-[#6B7280] uppercase tracking-wide">
+                              Colleges offering this course
+                            </p>
+
+                            {expandedCourseCollegesLoading ? (
+                              <p className="mt-3 text-sm text-[#6B7280]">Loading colleges...</p>
+                            ) : expandedCourseCollegesError ? (
+                              <p className="mt-3 text-sm text-red-600">{expandedCourseCollegesError}</p>
+                            ) : expandedCourseColleges.length === 0 ? (
+                              <p className="mt-3 text-sm text-[#6B7280]">
+                                No colleges linked yet. Ask the admin to add colleges for this course.
+                              </p>
+                            ) : (
+                              <div className="mt-3 space-y-2">
+                                {expandedCourseColleges.map((college) => {
+                                  const location = [college.city, college.state].filter(Boolean).join(", ")
+                                  return (
+                                    <div
+                                      key={college.id}
+                                      className="rounded-xl border border-orange-200 bg-white px-4 py-3"
+                                    >
+                                      <p className="text-sm font-semibold text-[#111827]">
+                                        {college.name || "Untitled college"}
+                                      </p>
+                                      {location && <p className="text-xs text-[#6B7280]">{location}</p>}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-[#6B7280]">
+                Found {filteredListings.length} {filteredListings.length === 1 ? "listing" : "listings"}
+              </p>
+              <div className="rounded-2xl border border-[#E5E7EB] bg-white">
+                <ul className="divide-y divide-[#E5E7EB]">
+                  {filteredListings.map((listing) => {
+                    // Get calculated rating from user reviews (preferred over admin rating)
+                    const calculatedRating = calculatedRatings[listing.id]
+                    const displayRating = calculatedRating?.average ?? null
+                    const reviewCount = calculatedRating?.count ?? 0
+                    
+                    // Build stats parts (excluding reviews, which will be shown with rating)
+                    const statsParts: string[] = []
+                    if (typeof listing.jobsCount === "number") {
+                      statsParts.push(`${formatCount(listing.jobsCount)} jobs`)
+                    }
+                    if (typeof listing.salariesCount === "number") {
+                      statsParts.push(`${formatCount(listing.salariesCount)} salaries`)
+                    }
+                    
+                    const locationDisplay = [listing.city, listing.state].filter(Boolean).join(", ") || "Location not specified"
+                    const hasLocationDisplay = locationDisplay !== "Location not specified"
+                    const locationHref = listing.locationLink
+                      ? normalizeUrl(listing.locationLink)
+                      : hasLocationDisplay
+                        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationDisplay)}`
+                        : ""
+                    const showDescription = !displayRating && statsParts.length === 0 && listing.description
 
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
-                            {displayRating !== null && (
-                              <span className="font-bold text-[#111827] text-base">
-                                {displayRating.toFixed(1)}★
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-sm text-[#6B7280]">
-                            {reviewCount > 0 && (
-                              <>
-                                <span>{formatCount(reviewCount)} reviews</span>
-                                {statsParts.length > 0 && " · "}
-                              </>
-                            )}
-                            {statsParts.length > 0 && statsParts.join(" · ")}
-                            {(reviewCount > 0 || statsParts.length > 0) && locationDisplay && " · "}
-                            {locationHref ? (
-                              <span
-                                role="link"
-                                tabIndex={0}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  window.open(locationHref, "_blank", "noopener,noreferrer")
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault()
+                    return (
+                      <li key={listing.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenListing(listing)}
+                          className="flex w-full gap-4 px-5 py-4 text-left transition-colors hover:bg-[#F9FAFB]"
+                        >
+                          {listing.logoUrl ? (
+                            <img
+                              src={listing.logoUrl}
+                              alt={listing.name}
+                              className="h-12 w-12 rounded-full border border-[#E5E7EB] object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-sm font-semibold text-[#111827]">
+                              {getInitials(listing.name)}
+                            </div>
+                          )}
+
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
+                              {displayRating !== null && (
+                                <span className="font-bold text-[#111827] text-base">
+                                  {displayRating.toFixed(1)}★
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm text-[#6B7280]">
+                              {reviewCount > 0 && (
+                                <>
+                                  <span>{formatCount(reviewCount)} reviews</span>
+                                  {statsParts.length > 0 && " · "}
+                                </>
+                              )}
+                              {statsParts.length > 0 && statsParts.join(" · ")}
+                              {(reviewCount > 0 || statsParts.length > 0) && locationDisplay && " · "}
+                              {locationHref ? (
+                                <span
+                                  role="link"
+                                  tabIndex={0}
+                                  onClick={(event) => {
                                     event.stopPropagation()
                                     window.open(locationHref, "_blank", "noopener,noreferrer")
-                                  }
-                                }}
-                                className="font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
-                              >
-                                {locationDisplay}
-                              </span>
-                            ) : (
-                              locationDisplay
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault()
+                                      event.stopPropagation()
+                                      window.open(locationHref, "_blank", "noopener,noreferrer")
+                                    }
+                                  }}
+                                  className="font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
+                                >
+                                  {locationDisplay}
+                                </span>
+                              ) : (
+                                locationDisplay
+                              )}
+                            </p>
+                            {showDescription && (
+                              <p className="mt-1 text-sm text-[#4B5563] line-clamp-2">{listing.description}</p>
                             )}
-                          </p>
-                          {showDescription && (
-                            <p className="mt-1 text-sm text-[#4B5563] line-clamp-2">{listing.description}</p>
-                          )}
-                        </div>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
+                          </div>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
             </div>
-          </div>
+          )
         )}
       </div>
         </>

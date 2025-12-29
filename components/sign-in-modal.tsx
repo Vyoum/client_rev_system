@@ -14,7 +14,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth"
-import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore"
+import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
 import { auth, googleProvider, db } from "@/lib/firebase"
 
 interface SignInModalProps {
@@ -55,6 +55,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       email?: string
       provider: "google" | "manual" | "email"
       uid?: string
+      role?: "user" | "subadmin" | "admin"
       createdAt: ReturnType<typeof serverTimestamp>
       updatedAt: ReturnType<typeof serverTimestamp>
     } = {
@@ -74,8 +75,13 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
 
     if (data.uid) {
-      await setDoc(doc(db, "users", data.uid), record, { merge: true })
+      const userRef = doc(db, "users", data.uid)
+      const existingDoc = await getDoc(userRef)
+      const existingRole = existingDoc.exists() ? (existingDoc.data()?.role as string | undefined) : undefined
+      record.role = (existingRole as "user" | "subadmin" | "admin") || "user"
+      await setDoc(userRef, record, { merge: true })
     } else {
+      record.role = "user"
       await addDoc(collection(db, "users"), record)
     }
   }

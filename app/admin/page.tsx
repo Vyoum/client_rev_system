@@ -2,15 +2,33 @@
 
 import type { Dispatch, SetStateAction } from "react"
 import { useEffect, useMemo, useState } from "react"
-import { collection, onSnapshot, orderBy, query, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, Timestamp, getDoc } from "firebase/firestore"
+import {
+  arrayRemove,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  addDoc,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { INDIA_COURSES } from "@/data/india-courses"
 import { db, auth } from "@/lib/firebase"
 import { X, ExternalLink, Upload } from "lucide-react"
 
 type ListingStatus = "Draft" | "Published"
 type ReviewStatus = "Visible" | "Hidden"
+type UserRole = "user" | "subadmin" | "admin"
 
 type ListingItem = {
   id: string
@@ -22,6 +40,8 @@ type ListingItem = {
   description: string
   whatsNew?: string
   others?: string
+  collegeIds?: string[]
+  courseIds?: string[]
   updatedAt: string
   createdAt?: Timestamp | string
   rating?: number | null
@@ -66,6 +86,7 @@ type UserRecord = {
   email?: string | null
   provider?: string
   createdAt?: unknown
+  role?: UserRole
 }
 
 const tabs = [
@@ -144,6 +165,12 @@ const mapListingData = (doc: any): ListingItem => {
     description: data.description || "",
     whatsNew: typeof data.whatsNew === "string" ? data.whatsNew : "",
     others: typeof data.others === "string" ? data.others : "",
+    collegeIds: Array.isArray(data.collegeIds)
+      ? data.collegeIds.filter((value: unknown): value is string => typeof value === "string" && value.trim() !== "")
+      : [],
+    courseIds: Array.isArray(data.courseIds)
+      ? data.courseIds.filter((value: unknown): value is string => typeof value === "string" && value.trim() !== "")
+      : [],
     mission: typeof data.mission === "string" ? data.mission : "",
     vision: typeof data.vision === "string" ? data.vision : "",
     facultyCount: parseOptionalNumber(data.facultyCount),
@@ -178,6 +205,11 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(true)
   const [usersError, setUsersError] = useState<string | null>(null)
   const [userQuery, setUserQuery] = useState("")
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserLoading, setCurrentUserLoading] = useState(true)
+  const [roleUpdateId, setRoleUpdateId] = useState<string | null>(null)
+  const [roleUpdateError, setRoleUpdateError] = useState<string | null>(null)
 
   const [schools, setSchools] = useState<ListingItem[]>([])
   const [colleges, setColleges] = useState<ListingItem[]>([])
@@ -192,8 +224,63 @@ export default function AdminPage() {
   const [reviews, setReviews] = useState<ReviewItem[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(true)
 
+  const isAdmin = currentUserRole === "admin"
+  const isSubadmin = currentUserRole === "subadmin"
+  const canManageListings = isAdmin || isSubadmin
+  const canManageReviews = isAdmin
+  const visibleTabs = useMemo(() => {
+    if (isAdmin) return tabs
+    if (isSubadmin) return tabs.filter((tab) => tab.id !== "reviews")
+    return []
+  }, [isAdmin, isSubadmin])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setCurrentUserRole(null)
+        setCurrentUserId(null)
+        setCurrentUserLoading(false)
+        return
+      }
+
+      setCurrentUserId(user.uid)
+      setCurrentUserLoading(true)
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid))
+        if (userDoc.exists()) {
+          const data = userDoc.data() as { role?: UserRole }
+          setCurrentUserRole(data.role ?? "user")
+        } else {
+          setCurrentUserRole("user")
+        }
+      } catch (error) {
+        console.error("Loading current user role failed:", error)
+        setCurrentUserRole("user")
+      } finally {
+        setCurrentUserLoading(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (currentUserLoading) return
+    if (visibleTabs.length === 0) return
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id)
+    }
+  }, [activeTab, currentUserLoading, visibleTabs])
+
   // Load reviews from Firestore
   useEffect(() => {
+    if (currentUserLoading) return
+    if (!canManageReviews) {
+      setReviews([])
+      setReviewsLoading(false)
+      return
+    }
+    setReviewsLoading(true)
     const reviewsRef = collection(db, "reviews")
     let reviewsQuery
     try {
@@ -321,10 +408,17 @@ export default function AdminPage() {
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [canManageReviews, currentUserLoading])
 
   // Load users
   useEffect(() => {
+    if (currentUserLoading) return
+    if (!isAdmin && !isSubadmin) {
+      setUsers([])
+      setUsersLoading(false)
+      return
+    }
+    setUsersLoading(true)
     const usersRef = collection(db, "users")
     const usersQuery = query(usersRef, orderBy("createdAt", "desc"))
     const unsubscribe = onSnapshot(
@@ -339,6 +433,7 @@ export default function AdminPage() {
             email: data.email || "",
             provider: data.provider || "",
             createdAt: data.createdAt,
+            role: (data.role as UserRole) || "user",
           }
         })
         setUsers(nextUsers)
@@ -354,10 +449,17 @@ export default function AdminPage() {
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [currentUserLoading, isAdmin, isSubadmin])
 
   // Load schools
   useEffect(() => {
+    if (currentUserLoading) return
+    if (!canManageListings) {
+      setSchools([])
+      setSchoolsLoading(false)
+      return
+    }
+    setSchoolsLoading(true)
     const schoolsRef = collection(db, "feed")
     // Try with orderBy first, fallback to simple query if index is missing
     let schoolsQuery
@@ -412,10 +514,17 @@ export default function AdminPage() {
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [canManageListings, currentUserLoading])
 
   // Load colleges
   useEffect(() => {
+    if (currentUserLoading) return
+    if (!canManageListings) {
+      setColleges([])
+      setCollegesLoading(false)
+      return
+    }
+    setCollegesLoading(true)
     const collegesRef = collection(db, "school")
     let collegesQuery
     try {
@@ -465,10 +574,17 @@ export default function AdminPage() {
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [canManageListings, currentUserLoading])
 
   // Load jobs
   useEffect(() => {
+    if (currentUserLoading) return
+    if (!canManageListings) {
+      setJobs([])
+      setJobsLoading(false)
+      return
+    }
+    setJobsLoading(true)
     const jobsRef = collection(db, "colleges")
     let jobsQuery
     try {
@@ -518,10 +634,17 @@ export default function AdminPage() {
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [canManageListings, currentUserLoading])
 
   // Load companies
   useEffect(() => {
+    if (currentUserLoading) return
+    if (!canManageListings) {
+      setCompanies([])
+      setCompaniesLoading(false)
+      return
+    }
+    setCompaniesLoading(true)
     const companiesRef = collection(db, "kindergarden")
     let companiesQuery
     try {
@@ -571,10 +694,17 @@ export default function AdminPage() {
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [canManageListings, currentUserLoading])
 
   // Load courses
   useEffect(() => {
+    if (currentUserLoading) return
+    if (!canManageListings) {
+      setCourses([])
+      setCoursesLoading(false)
+      return
+    }
+    setCoursesLoading(true)
     const coursesRef = collection(db, "courses")
     let coursesQuery
     try {
@@ -624,7 +754,7 @@ export default function AdminPage() {
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [canManageListings, currentUserLoading])
 
   const filteredUsers = useMemo(() => {
     const query = userQuery.trim().toLowerCase()
@@ -637,6 +767,28 @@ export default function AdminPage() {
       )
     })
   }, [userQuery, users])
+
+  const handleRoleChange = async (userId: string, nextRole: UserRole) => {
+    if (!isAdmin) return
+    if (!userId) return
+    if (userId === currentUserId) {
+      setRoleUpdateError("You cannot change your own role.")
+      return
+    }
+    setRoleUpdateError(null)
+    setRoleUpdateId(userId)
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        role: nextRole,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (error) {
+      console.error("Updating user role failed:", error)
+      setRoleUpdateError("Failed to update user role. Please try again.")
+    } finally {
+      setRoleUpdateId(null)
+    }
+  }
 
   const listingsTotal = schools.length + colleges.length + jobs.length + companies.length + courses.length
   const publishedListings =
@@ -656,9 +808,38 @@ export default function AdminPage() {
   }
 
   const activeListingConfig =
-    activeTab === "schools" || activeTab === "colleges" || activeTab === "jobs" || activeTab === "companies" || activeTab === "courses"
+    canManageListings &&
+    (activeTab === "schools" || activeTab === "colleges" || activeTab === "jobs" || activeTab === "companies" || activeTab === "courses")
       ? listingConfigMap[activeTab]
       : null
+
+  if (currentUserLoading) {
+    return (
+      <div className="min-h-screen bg-[#0B0D0F] text-[#E6E8EA]">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-6 text-center">
+          <div>
+            <h1 className="text-2xl font-semibold">Checking admin access...</h1>
+            <p className="mt-2 text-sm text-white/60">Please wait while we verify your permissions.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (visibleTabs.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#0B0D0F] text-[#E6E8EA]">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-6 text-center">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-8">
+            <h1 className="text-2xl font-semibold">Admin access only</h1>
+            <p className="mt-2 text-sm text-white/60">
+              This portal is restricted to admins and subadmins. Please sign in with an approved account.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative min-h-screen bg-[#0B0D0F] text-[#E6E8EA]">
@@ -680,15 +861,15 @@ export default function AdminPage() {
           </div>
         </header>
 
-        <section className="mt-6 grid gap-4 md:grid-cols-3">
+        <section className={`mt-6 grid gap-4 ${canManageReviews ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
           <SummaryCard title="Users" value={usersLoading ? "Loading..." : `${users.length}`} detail="Signed up" />
           <SummaryCard title="Listings" value={`${publishedListings}/${listingsTotal}`} detail="Published" />
-          <SummaryCard title="Reviews" value={`${hiddenReviews}`} detail="Hidden" />
+          {canManageReviews && <SummaryCard title="Reviews" value={`${hiddenReviews}`} detail="Hidden" />}
         </section>
 
         <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-2">
           <div className="flex flex-wrap gap-2">
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -704,7 +885,7 @@ export default function AdminPage() {
         </section>
 
         <section className="mt-6">
-          {activeTab === "users" && (
+          {(isAdmin || isSubadmin) && activeTab === "users" && (
             <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -722,6 +903,11 @@ export default function AdminPage() {
               {usersError && (
                 <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
                   {usersError}
+                </div>
+              )}
+              {roleUpdateError && (
+                <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                  {roleUpdateError}
                 </div>
               )}
 
@@ -742,10 +928,35 @@ export default function AdminPage() {
                           {user.email || "No email"} • {user.phone || "No phone"}
                         </p>
                       </div>
-                      <div className="text-xs text-white/60">
-                        <span className="rounded-full bg-white/10 px-2 py-1">{user.provider || "manual"}</span>
-                        <span className="ml-2">{formatTimestamp(user.createdAt)}</span>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
+                        <span className="rounded-full bg-white/10 px-2 py-1">
+                          {user.provider || "manual"}
+                        </span>
+                        <span>{formatTimestamp(user.createdAt)}</span>
                       </div>
+                      {(isAdmin || isSubadmin) && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-white/40">Role</span>
+                          <select
+                            value={user.role || "user"}
+                            onChange={(event) => handleRoleChange(user.id, event.target.value as UserRole)}
+                            disabled={!isAdmin || roleUpdateId === user.id || user.id === currentUserId}
+                            className="h-8 rounded-md border border-white/10 bg-white/10 px-2 text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                            title={
+                              !isAdmin
+                                ? "Only admins can change roles."
+                                : user.id === currentUserId
+                                  ? "You cannot change your own role."
+                                  : "Change user role"
+                            }
+                          >
+                            <option value="user">User</option>
+                            <option value="subadmin">Subadmin</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          {roleUpdateId === user.id && <span className="text-white/40">Saving...</span>}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -764,7 +975,9 @@ export default function AdminPage() {
             />
           )}
 
-          {activeTab === "reviews" && <ReviewsPanel reviews={reviews} setReviews={setReviews} loading={reviewsLoading} />}
+          {activeTab === "reviews" && canManageReviews && (
+            <ReviewsPanel reviews={reviews} setReviews={setReviews} loading={reviewsLoading} />
+          )}
         </section>
       </div>
     </div>
@@ -802,6 +1015,7 @@ function ListingsPanel({
     whatsNew: "",
     description: "",
     others: "",
+    collegeIds: [] as string[],
     rating: "",
     jobsCount: "",
     reviewsCount: "",
@@ -836,6 +1050,88 @@ function ListingsPanel({
   const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
   const isCollegeLikeForm = ["colleges", "school", "kindergarden"].includes(collectionName)
   const isCoursesForm = collectionName === "courses"
+  const [collegeOptions, setCollegeOptions] = useState<Array<{ id: string; name: string; city: string; state: string; status: ListingStatus }>>([])
+  const [collegeOptionsLoading, setCollegeOptionsLoading] = useState(false)
+  const [collegeSearch, setCollegeSearch] = useState("")
+  const [seedingCourses, setSeedingCourses] = useState(false)
+  const [seedInfo, setSeedInfo] = useState<string | null>(null)
+
+  const handleSeedIndiaCourses = async () => {
+    if (!isCoursesForm) return
+    setSeedingCourses(true)
+    setSeedInfo(null)
+    setFormError(null)
+    try {
+      const normalize = (value: string) => value.trim().toLowerCase()
+      const existingKeys = new Set(
+        items.map((item) => `${normalize(item.courseName || item.name || "")}|${normalize(item.courseField || "")}`)
+      )
+      const toCreate = INDIA_COURSES.filter((course) => {
+        const key = `${normalize(course.courseName)}|${normalize(course.courseField)}`
+        return !existingKeys.has(key)
+      })
+
+      if (toCreate.length === 0) {
+        setSeedInfo("All India courses are already present.")
+        return
+      }
+
+      const batch = writeBatch(db)
+      toCreate.forEach((course) => {
+        const ref = doc(collection(db, "courses"))
+        batch.set(ref, {
+          name: course.courseName,
+          courseName: course.courseName,
+          courseField: course.courseField,
+          status: "Published",
+          description: "",
+          others: "",
+          collegeIds: [],
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        })
+      })
+      await batch.commit()
+      setSeedInfo(`Added ${toCreate.length} courses.`)
+    } catch (error) {
+      console.error("Seeding India courses failed:", error)
+      setFormError("Failed to seed India courses. Please try again.")
+    } finally {
+      setSeedingCourses(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!isCoursesForm) return
+    setCollegeOptionsLoading(true)
+    const collegesRef = collection(db, "colleges")
+    const unsubscribe = onSnapshot(
+      query(collegesRef),
+      (snapshot) => {
+        const nextColleges = snapshot.docs
+          .map((doc) => {
+            const data = doc.data() as Record<string, unknown>
+            return {
+              id: doc.id,
+              name: typeof data.name === "string" ? data.name : "",
+              city: typeof data.city === "string" ? data.city : "",
+              state: typeof data.state === "string" ? data.state : "",
+              status: ((typeof data.status === "string" ? data.status : "Draft") as ListingStatus) ?? "Draft",
+            }
+          })
+          .sort((a, b) => a.name.localeCompare(b.name))
+        setCollegeOptions(nextColleges)
+        setCollegeOptionsLoading(false)
+      },
+      (error) => {
+        console.error("Loading colleges list failed:", error)
+        setCollegeOptions([])
+        setCollegeOptionsLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [isCoursesForm])
 
   const filteredItems = useMemo(() => {
     const query = filterQuery.trim().toLowerCase()
@@ -849,6 +1145,19 @@ function ListingsPanel({
     })
   }, [filterQuery, items])
 
+  const filteredCollegeOptions = useMemo(() => {
+    if (!isCoursesForm) return []
+    const query = collegeSearch.trim().toLowerCase()
+    if (!query) return collegeOptions
+    return collegeOptions.filter((college) => {
+      return (
+        college.name.toLowerCase().includes(query) ||
+        college.city.toLowerCase().includes(query) ||
+        college.state.toLowerCase().includes(query)
+      )
+    })
+  }, [collegeOptions, collegeSearch, isCoursesForm])
+
   const resetDraft = () => {
     setDraft({
       name: "",
@@ -858,6 +1167,7 @@ function ListingsPanel({
       whatsNew: "",
       description: "",
       others: "",
+      collegeIds: [] as string[],
       rating: "",
       jobsCount: "",
       reviewsCount: "",
@@ -982,6 +1292,10 @@ function ListingsPanel({
         throw new Error("Collection name is missing")
       }
       
+      const nextCollegeIds = isCoursesForm ? draft.collegeIds.filter((value) => typeof value === "string" && value.trim() !== "") : []
+      const previousCollegeIds =
+        isCoursesForm && editingId ? (items.find((item) => item.id === editingId)?.collegeIds ?? []) : []
+
       const cityValue = draft.city.trim()
       const stateValue = draft.state.trim()
       // Derive location from city and state for backward compatibility
@@ -1014,6 +1328,10 @@ function ListingsPanel({
 
       const courseStudentsEnrolled = parseOptionalNumber(draft.courseStudentsEnrolled)
       if (courseStudentsEnrolled !== null) listingData.courseStudentsEnrolled = courseStudentsEnrolled
+
+      if (isCoursesForm) {
+        listingData.collegeIds = nextCollegeIds
+      }
 
       // Add Mission field
       const mission = draft.mission.trim()
@@ -1136,17 +1454,34 @@ function ListingsPanel({
       console.log("Saving to collection:", collectionName)
       console.log("Listing data:", listingData)
 
+      let savedId = editingId
       if (editingId) {
         // Update existing listing
         const listingRef = doc(db, collectionName, editingId)
         await updateDoc(listingRef, listingData)
       } else {
         // Create new listing
-        await addDoc(collection(db, collectionName), {
+        const docRef = await addDoc(collection(db, collectionName), {
           ...listingData,
           createdAt: serverTimestamp(),
         })
+        savedId = docRef.id
     }
+
+      if (isCoursesForm && savedId) {
+        const idsToAdd = nextCollegeIds.filter((id) => !previousCollegeIds.includes(id))
+        const idsToRemove = previousCollegeIds.filter((id) => !nextCollegeIds.includes(id))
+        if (idsToAdd.length > 0 || idsToRemove.length > 0) {
+          const batch = writeBatch(db)
+          idsToAdd.forEach((collegeId) => {
+            batch.update(doc(db, "colleges", collegeId), { courseIds: arrayUnion(savedId!) })
+          })
+          idsToRemove.forEach((collegeId) => {
+            batch.update(doc(db, "colleges", collegeId), { courseIds: arrayRemove(savedId!) })
+          })
+          await batch.commit()
+        }
+      }
 
     resetDraft()
     } catch (error: any) {
@@ -1168,6 +1503,7 @@ function ListingsPanel({
       whatsNew: item.whatsNew || "",
       description: item.description,
       others: item.others || "",
+      collegeIds: Array.isArray(item.collegeIds) ? item.collegeIds : [],
       rating: item.rating != null ? String(item.rating) : "",
       jobsCount: item.jobsCount != null ? String(item.jobsCount) : "",
       reviewsCount: item.reviewsCount != null ? String(item.reviewsCount) : "",
@@ -1211,6 +1547,16 @@ function ListingsPanel({
     }
 
     try {
+      if (isCoursesForm) {
+        const associatedCollegeIds = items.find((item) => item.id === id)?.collegeIds ?? []
+        if (associatedCollegeIds.length > 0) {
+          const batch = writeBatch(db)
+          associatedCollegeIds.forEach((collegeId) => {
+            batch.update(doc(db, "colleges", collegeId), { courseIds: arrayRemove(id) })
+          })
+          await batch.commit()
+        }
+      }
       await deleteDoc(doc(db, collectionName, id))
     if (editingId === id) {
       resetDraft()
@@ -1229,13 +1575,26 @@ function ListingsPanel({
             <h2 className="text-lg font-semibold">{label} listings</h2>
             <p className="text-sm text-white/60">Add, edit, or retire a listing.</p>
           </div>
-          <Input
-            value={filterQuery}
-            onChange={(event) => setFilterQuery(event.target.value)}
-            placeholder={`Search ${label.toLowerCase()} listings`}
-            className="h-10 w-full bg-white/10 text-white placeholder:text-white/40 sm:w-64"
-          />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Input
+              value={filterQuery}
+              onChange={(event) => setFilterQuery(event.target.value)}
+              placeholder={`Search ${label.toLowerCase()} listings`}
+              className="h-10 w-full bg-white/10 text-white placeholder:text-white/40 sm:w-64"
+            />
+            {isCoursesForm && (
+              <Button
+                size="sm"
+                className="h-10 bg-orange-500 text-white hover:bg-orange-600"
+                onClick={handleSeedIndiaCourses}
+                disabled={seedingCourses || saving}
+              >
+                {seedingCourses ? "Seeding..." : "Seed India courses"}
+              </Button>
+            )}
+          </div>
         </div>
+        {seedInfo && <p className="mt-3 text-xs text-white/60">{seedInfo}</p>}
 
         <div className="mt-4 space-y-3">
           {loading ? (
@@ -1711,6 +2070,64 @@ function ListingsPanel({
                   </div>
                 </div>
               )}
+
+              {isCoursesForm && (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold text-white/70">Colleges offering this course</p>
+                    <p className="text-xs text-white/50">{draft.collegeIds.length} selected</p>
+                  </div>
+                  <Input
+                    value={collegeSearch}
+                    onChange={(event) => setCollegeSearch(event.target.value)}
+                    placeholder="Search colleges"
+                    className="h-9 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    disabled={saving}
+                  />
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                    {collegeOptionsLoading ? (
+                      <p className="text-sm text-white/60">Loading colleges...</p>
+                    ) : filteredCollegeOptions.length === 0 ? (
+                      <p className="text-sm text-white/60">No colleges found.</p>
+                    ) : (
+                      filteredCollegeOptions.map((college) => {
+                        const checked = draft.collegeIds.includes(college.id)
+                        const subheading = [college.city, college.state].filter(Boolean).join(", ")
+                        return (
+                          <label
+                            key={college.id}
+                            className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 cursor-pointer hover:bg-white/10"
+                          >
+                            <input
+                              type="checkbox"
+                              className="mt-1 accent-orange-500"
+                              checked={checked}
+                              onChange={(event) => {
+                                const isChecked = event.target.checked
+                                setDraft((prev) => {
+                                  const nextIds = isChecked
+                                    ? Array.from(new Set([...prev.collegeIds, college.id]))
+                                    : prev.collegeIds.filter((id) => id !== college.id)
+                                  return { ...prev, collegeIds: nextIds }
+                                })
+                              }}
+                              disabled={saving}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
+                              {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
+                            </div>
+                            <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
+                              {college.status}
+                            </span>
+                          </label>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
               <Textarea
                 value={draft.others}
                 onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
