@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ExternalLink, User } from "lucide-react"
+import { ChevronLeft, ExternalLink, User, MoreVertical, ThumbsUp } from "lucide-react"
 import { INDIA_LOCATIONS } from "../data/india-locations"
 import SignInModal from "./sign-in-modal"
-import { collection, query, onSnapshot, Timestamp, addDoc, serverTimestamp, where, orderBy } from "firebase/firestore"
+import { collection, query, onSnapshot, Timestamp, addDoc, serverTimestamp, where, orderBy, updateDoc, doc, arrayUnion, arrayRemove, increment } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 
 const tabs = ["Feed", "Colleges", "School", "Kindergarden", "Courses"]
@@ -52,6 +52,8 @@ type ReviewItem = {
   message: string
   createdAt: Timestamp | string
   updatedAt?: Timestamp | string
+  likes?: number
+  likedBy?: string[] // Array of user IDs who liked this review
 }
 
 const getCollectionName = (tab: string): string => {
@@ -87,8 +89,13 @@ export default function SearchCommunityPage() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
   const [calculatedRatings, setCalculatedRatings] = useState<Record<string, { average: number; count: number }>>({})
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [reportingReviewId, setReportingReviewId] = useState<string | null>(null)
+  const [reportReason, setReportReason] = useState("")
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const locationRef = useRef<HTMLDivElement>(null)
   const citiesRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const filteredStates = useMemo(() => {
     const query = locationQuery.trim().toLowerCase()
@@ -254,6 +261,8 @@ export default function SearchCommunityPage() {
               message: data.message || "",
               createdAt: data.createdAt || serverTimestamp(),
               updatedAt: data.updatedAt,
+              likes: typeof data.likes === "number" ? data.likes : 0,
+              likedBy: Array.isArray(data.likedBy) ? data.likedBy : [],
             }
           })
           .sort((a, b) => {
@@ -293,6 +302,8 @@ export default function SearchCommunityPage() {
                     message: data.message || "",
                     createdAt: data.createdAt || serverTimestamp(),
                     updatedAt: data.updatedAt,
+                    likes: typeof data.likes === "number" ? data.likes : 0,
+                    likedBy: Array.isArray(data.likedBy) ? data.likedBy : [],
                   }
                 })
                 .sort((a, b) => {
@@ -359,6 +370,8 @@ export default function SearchCommunityPage() {
         listingId: selectedListing.id,
         authorName: currentUser.displayName || currentUser.email?.split("@")[0] || "Anonymous",
         authorId: currentUser.uid,
+        likes: 0,
+        likedBy: [],
         rating: reviewForm.rating,
         message: trimmedMessage,
         createdAt: serverTimestamp(),
@@ -414,6 +427,92 @@ export default function SearchCommunityPage() {
       setIsSubmittingReview(false)
     }
   }
+
+  const handleLikeReview = async (reviewId: string, currentLikedBy: string[] = [], currentLikes: number = 0) => {
+    const currentUser = auth.currentUser
+    if (!currentUser) {
+      setIsSignInOpen(true)
+      return
+    }
+
+    const userId = currentUser.uid
+    const isLiked = currentLikedBy.includes(userId)
+
+    try {
+      const reviewRef = doc(db, "reviews", reviewId)
+      
+      if (isLiked) {
+        // Unlike: remove user from likedBy and decrement likes
+        await updateDoc(reviewRef, {
+          likedBy: arrayRemove(userId),
+          likes: increment(-1)
+        })
+      } else {
+        // Like: add user to likedBy and increment likes
+        await updateDoc(reviewRef, {
+          likedBy: arrayUnion(userId),
+          likes: increment(1)
+        })
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error)
+    }
+  }
+
+  const handleReportReview = (reviewId: string) => {
+    setReportingReviewId(reviewId)
+    setReportModalOpen(true)
+    setOpenMenuId(null)
+  }
+
+  const handleSubmitReport = async () => {
+    if (!reportingReviewId || !reportReason.trim()) {
+      return
+    }
+
+    const currentUser = auth.currentUser
+    if (!currentUser) {
+      setIsSignInOpen(true)
+      setReportModalOpen(false)
+      return
+    }
+
+    try {
+      // Create a report document in a "reports" collection
+      await addDoc(collection(db, "reports"), {
+        reviewId: reportingReviewId,
+        reason: reportReason.trim(),
+        reportedBy: currentUser.uid,
+        reportedByName: currentUser.displayName || currentUser.email || "Anonymous",
+        createdAt: serverTimestamp(),
+        status: "pending"
+      })
+
+      setReportModalOpen(false)
+      setReportingReviewId(null)
+      setReportReason("")
+      alert("Thank you for reporting this review. We will review it shortly.")
+    } catch (error) {
+      console.error("Error submitting report:", error)
+      alert("Failed to submit report. Please try again.")
+    }
+  }
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+
+    if (openMenuId) {
+      document.addEventListener("mousedown", handleClickOutside)
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside)
+      }
+    }
+  }, [openMenuId])
 
   useEffect(() => {
     const media = window.matchMedia("(hover: hover) and (pointer: fine)")
@@ -889,38 +988,85 @@ export default function SearchCommunityPage() {
                           <p className="text-sm text-[#6B7280]">Be the first to review this listing!</p>
                         ) : (
                           <div className="space-y-4">
-                            {reviews.map((review) => (
-                              <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                                <div className="flex items-start gap-2 mb-2">
-                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
-                                    {review.authorName.charAt(0).toUpperCase()}
+                            {reviews.map((review) => {
+                              const currentUser = auth.currentUser
+                              const userId = currentUser?.uid || ""
+                              const isLiked = review.likedBy?.includes(userId) || false
+                              const likeCount = review.likes || 0
+                              
+                              return (
+                                <div key={review.id} className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                                  <div className="flex items-start gap-2 mb-2">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-sm font-semibold text-orange-500">
+                                      {review.authorName.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="text-sm text-[#111827]">
+                                            <span className="font-semibold">{review.authorName}</span>
+                                            {typeof review.rating === "number" && (
+                                              <span className="font-bold text-[#111827] ml-2">
+                                                {review.rating.toFixed(1)}★
+                                              </span>
+                                            )}
+                                          </p>
+                                          <p className="text-xs text-[#6B7280] mt-0.5">
+                                            {(() => {
+                                              if (!review.createdAt) return "Recently"
+                                              if (typeof review.createdAt === "string") {
+                                                return new Date(review.createdAt).toLocaleDateString()
+                                              }
+                                              if (review.createdAt && typeof review.createdAt === "object" && "toDate" in review.createdAt) {
+                                                return review.createdAt.toDate().toLocaleDateString()
+                                              }
+                                              return "Recently"
+                                            })()}
+                                          </p>
+                                        </div>
+                                        {/* 3-dot menu */}
+                                        <div className="relative" ref={menuRef}>
+                                          <button
+                                            type="button"
+                                            onClick={() => setOpenMenuId(openMenuId === review.id ? null : review.id)}
+                                            className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                                          >
+                                            <MoreVertical className="h-5 w-5 text-[#6B7280]" />
+                                          </button>
+                                          {openMenuId === review.id && (
+                                            <div className="absolute right-0 top-8 z-10 bg-white rounded-lg shadow-lg border border-[#E5E7EB] py-1 min-w-[120px]">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleReportReview(review.id)}
+                                                className="w-full text-left px-4 py-2 text-sm text-[#111827] hover:bg-[#F9FAFB] transition-colors"
+                                              >
+                                                Report
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="flex-1">
-                                    <p className="text-sm text-[#111827]">
-                                      <span className="font-semibold">{review.authorName}</span>
-                                      {typeof review.rating === "number" && (
-                                        <span className="font-bold text-[#111827] ml-2">
-                                          {review.rating.toFixed(1)}★
-                                        </span>
-                                      )}
-                                    </p>
-                                    <p className="text-xs text-[#6B7280] mt-0.5">
-                                      {(() => {
-                                        if (!review.createdAt) return "Recently"
-                                        if (typeof review.createdAt === "string") {
-                                          return new Date(review.createdAt).toLocaleDateString()
-                                        }
-                                        if (review.createdAt && typeof review.createdAt === "object" && "toDate" in review.createdAt) {
-                                          return review.createdAt.toDate().toLocaleDateString()
-                                        }
-                                        return "Recently"
-                                      })()}
-                                    </p>
+                                  <p className="text-sm text-[#4B5563] whitespace-pre-wrap mb-3">{review.message}</p>
+                                  {/* Like button */}
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLikeReview(review.id, review.likedBy, review.likes)}
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                                        isLiked
+                                          ? "bg-orange-500/10 text-orange-500"
+                                          : "bg-gray-100 text-[#6B7280] hover:bg-gray-200"
+                                      }`}
+                                    >
+                                      <ThumbsUp className={`h-4 w-4 ${isLiked ? "fill-current" : ""}`} />
+                                      <span className="text-sm font-medium">{likeCount > 0 ? likeCount : "Helpful"}</span>
+                                    </button>
                                   </div>
                                 </div>
-                                <p className="text-sm text-[#4B5563] whitespace-pre-wrap">{review.message}</p>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         )}
                       </div>
@@ -1256,6 +1402,46 @@ export default function SearchCommunityPage() {
       )}
       
       <SignInModal isOpen={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
+      
+      {/* Report Modal */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-[#111827] mb-4">Report Review</h3>
+            <p className="text-sm text-[#6B7280] mb-4">
+              Please tell us why you're reporting this review. This helps us keep our community safe.
+            </p>
+            <textarea
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              placeholder="Enter reason for reporting..."
+              rows={4}
+              className="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#111827] placeholder-[#9CA3AF] focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 mb-4"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setReportModalOpen(false)
+                  setReportingReviewId(null)
+                  setReportReason("")
+                }}
+                className="px-4 py-2 text-sm font-semibold text-[#6B7280] hover:text-[#111827] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReport}
+                disabled={!reportReason.trim()}
+                className="px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-full hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Submit Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
