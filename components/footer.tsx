@@ -4,27 +4,27 @@ import { Facebook, Twitter, Youtube, Instagram, Linkedin, Mail, Phone, MapPin } 
 export default function Footer() {
   return (
     <footer className="bg-orange-500 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {/* Company Info */}
           <div className="space-y-4">
             <div>
-              <h3 className="text-xl font-bold mb-4">WorkHub</h3>
+              <h3 className="text-lg font-bold mb-3">WorkHub</h3>
               <p className="text-sm text-white/80 leading-relaxed">
                 Your trusted platform for finding the best educational institutions, courses, and career opportunities.
               </p>
             </div>
-            <div className="space-y-2 text-sm text-white/80">
+            <div className="space-y-1.5 text-sm text-white/80">
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
+                <MapPin className="h-3.5 w-3.5" />
                 <span>123 Education Street, Learning City, LC 12345</span>
               </div>
               <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
+                <Phone className="h-3.5 w-3.5" />
                 <span>+1 (555) 123-4567</span>
               </div>
               <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
+                <Mail className="h-3.5 w-3.5" />
                 <span>info@workhub.com</span>
               </div>
             </div>
@@ -32,8 +32,8 @@ export default function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
-            <ul className="space-y-2">
+            <h3 className="text-base font-semibold mb-3">Quick Links</h3>
+            <ul className="space-y-1.5">
               <li>
                 <Link href="#" className="text-sm text-white/80 hover:text-white transition-colors">
                   About Us
@@ -49,8 +49,8 @@ export default function Footer() {
 
           {/* Resources */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Resources</h3>
-            <ul className="space-y-2">
+            <h3 className="text-base font-semibold mb-3">Resources</h3>
+            <ul className="space-y-1.5">
               <li>
                 <Link href="#" className="text-sm text-white/80 hover:text-white transition-colors">
                   Privacy Policy
@@ -76,52 +76,52 @@ export default function Footer() {
 
           {/* Social Media */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Follow Us</h3>
-            <p className="text-sm text-white/80 mb-4">
+            <h3 className="text-base font-semibold mb-3">Follow Us</h3>
+            <p className="text-sm text-white/80 mb-3">
               Stay connected with us on social media for the latest updates and news.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <Link
                 href="#"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 aria-label="Facebook"
               >
-                <Facebook className="h-5 w-5" />
+                <Facebook className="h-4 w-4" />
               </Link>
               <Link
                 href="#"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 aria-label="Twitter"
               >
-                <Twitter className="h-5 w-5" />
+                <Twitter className="h-4 w-4" />
               </Link>
               <Link
                 href="#"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 aria-label="LinkedIn"
               >
-                <Linkedin className="h-5 w-5" />
+                <Linkedin className="h-4 w-4" />
               </Link>
               <Link
                 href="#"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 aria-label="Instagram"
               >
-                <Instagram className="h-5 w-5" />
+                <Instagram className="h-4 w-4" />
               </Link>
               <Link
                 href="#"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 aria-label="YouTube"
               >
-                <Youtube className="h-5 w-5" />
+                <Youtube className="h-4 w-4" />
               </Link>
             </div>
           </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="border-t border-white/20 pt-6 mt-6">
+        <div className="border-t border-white/20 pt-4 mt-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-white/80 text-center md:text-left">
               © {new Date().getFullYear()} WorkHub LLC. All rights reserved.

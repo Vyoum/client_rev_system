@@ -1541,9 +1541,11 @@ export default function SearchCommunityPage() {
                   title={isLocked ? "Sign in to access this section" : undefined}
                 >
                   {tab}
-                  {isActive && (
-                    <div className="absolute left-0 right-0 -bottom-px h-1 bg-orange-500" />
-                  )}
+                  <span
+                    className={`absolute left-0 right-0 -bottom-px h-1 bg-orange-500 origin-left transition-transform duration-300 ease-out ${
+                      isActive ? "scale-x-100" : "scale-x-0"
+                    }`}
+                  />
                 </button>
               )
             })}
@@ -1554,8 +1556,8 @@ export default function SearchCommunityPage() {
       {/* Content Area */}
       <div className="flex-1 px-5 sm:px-6 py-6 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full">
         {listingsLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <p className="text-[#6B7280]">Loading {activeTab.toLowerCase()}...</p>
+          <div className="py-6">
+            {activeTab === "Courses" ? <CourseRowsSkeleton /> : <ListingsSkeleton />}
           </div>
         ) : filteredListings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -1886,6 +1888,65 @@ function StarIcon() {
     <svg className="h-4 w-4 text-[#111827]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M12 17.27l5.18 3.04-1.4-5.95L20.5 9.5l-6.12-.52L12 3.5 9.62 8.98 3.5 9.5l4.72 4.86-1.4 5.95z" />
     </svg>
+  )
+}
+
+function ListingsSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      <div className="h-4 w-40 rounded-full bg-[#E5E7EB]" />
+      <div className="rounded-2xl border border-[#E5E7EB] bg-white">
+        <div className="divide-y divide-[#E5E7EB]">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={`listing-skeleton-${index}`} className="flex gap-4 px-5 py-4">
+              <div className="h-12 w-12 rounded-full bg-[#E5E7EB]" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
+                <div className="h-3 w-64 rounded bg-[#E5E7EB]" />
+                <div className="h-3 w-40 rounded bg-[#E5E7EB]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CourseRowsSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      <div className="h-4 w-48 rounded-full bg-[#E5E7EB]" />
+      <div className="rounded-2xl border border-[#E5E7EB] bg-white overflow-hidden">
+        <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 px-5 py-3 bg-[#F9FAFB]">
+          <div className="h-3 w-24 rounded bg-[#E5E7EB]" />
+          <div className="h-3 w-16 rounded bg-[#E5E7EB]" />
+          <div className="h-3 w-12 rounded bg-[#E5E7EB]" />
+          <div className="h-3 w-16 rounded bg-[#E5E7EB]" />
+          <div className="h-3 w-6 rounded bg-[#E5E7EB] justify-self-end" />
+        </div>
+        <div className="divide-y divide-[#E5E7EB]">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={`course-skeleton-${index}`} className="px-5 py-4">
+              <div className="flex items-start gap-3 sm:hidden">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-44 rounded bg-[#E5E7EB]" />
+                  <div className="h-3 w-56 rounded bg-[#E5E7EB]" />
+                </div>
+                <div className="h-5 w-5 rounded bg-[#E5E7EB]" />
+              </div>
+              <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 items-center">
+                <div className="h-4 w-44 rounded bg-[#E5E7EB]" />
+                <div className="h-3 w-24 rounded bg-[#E5E7EB]" />
+                <div className="h-3 w-16 rounded bg-[#E5E7EB]" />
+                <div className="h-3 w-20 rounded bg-[#E5E7EB]" />
+                <div className="h-5 w-5 rounded bg-[#E5E7EB] justify-self-end" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
