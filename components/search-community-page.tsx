@@ -1388,6 +1388,12 @@ export default function SearchCommunityPage() {
                   }
                   
                   const locationDisplay = [listing.city, listing.state].filter(Boolean).join(", ") || "Location not specified"
+                  const hasLocationDisplay = locationDisplay !== "Location not specified"
+                  const locationHref = listing.locationLink
+                    ? normalizeUrl(listing.locationLink)
+                    : hasLocationDisplay
+                      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationDisplay)}`
+                      : ""
                   const showDescription = !displayRating && statsParts.length === 0 && listing.description
 
                   return (
@@ -1428,7 +1434,28 @@ export default function SearchCommunityPage() {
                             )}
                             {statsParts.length > 0 && statsParts.join(" · ")}
                             {(reviewCount > 0 || statsParts.length > 0) && locationDisplay && " · "}
-                            {locationDisplay}
+                            {locationHref ? (
+                              <span
+                                role="link"
+                                tabIndex={0}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  window.open(locationHref, "_blank", "noopener,noreferrer")
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    window.open(locationHref, "_blank", "noopener,noreferrer")
+                                  }
+                                }}
+                                className="font-semibold text-orange-500 hover:text-orange-600 cursor-pointer"
+                              >
+                                {locationDisplay}
+                              </span>
+                            ) : (
+                              locationDisplay
+                            )}
                           </p>
                           {showDescription && (
                             <p className="mt-1 text-sm text-[#4B5563] line-clamp-2">{listing.description}</p>

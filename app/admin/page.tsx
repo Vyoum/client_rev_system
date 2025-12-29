@@ -822,6 +822,7 @@ function ListingsPanel({
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
+  const isCollegesForm = collectionName === "colleges"
 
   const filteredItems = useMemo(() => {
     const query = filterQuery.trim().toLowerCase()
@@ -1257,32 +1258,14 @@ function ListingsPanel({
             placeholder={`${label} name`}
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
-          <div className="grid gap-3 sm:grid-cols-2">
-          <Input
-              value={draft.state}
-              onChange={(event) => setDraft((prev) => ({ ...prev, state: event.target.value }))}
-              placeholder="State"
-            className="h-10 bg-white/10 text-white placeholder:text-white/40"
-          />
+          {isCollegesForm && (
             <Input
-              value={draft.city}
-              onChange={(event) => setDraft((prev) => ({ ...prev, city: event.target.value }))}
-              placeholder="City"
+              value={draft.logoUrl}
+              onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
+              placeholder="Logo URL"
               className="h-10 bg-white/10 text-white placeholder:text-white/40"
             />
-          </div>
-          <Input
-            value={draft.website}
-            onChange={(event) => setDraft((prev) => ({ ...prev, website: event.target.value }))}
-            placeholder="Website"
-            className="h-10 bg-white/10 text-white placeholder:text-white/40"
-          />
-          <Input
-            value={draft.logoUrl}
-            onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
-            placeholder="Logo URL"
-            className="h-10 bg-white/10 text-white placeholder:text-white/40"
-          />
+          )}
         </div>
 
         {/* Form Sections Tabs */}
@@ -1299,7 +1282,11 @@ function ListingsPanel({
                     : "text-white/60 hover:text-white/80"
                 }`}
               >
-                {section === "whatsnew" ? "What's New" : section.charAt(0).toUpperCase() + section.slice(1)}
+                {section === "whatsnew"
+                  ? "What's New"
+                  : section === "others"
+                    ? "Courses"
+                    : section.charAt(0).toUpperCase() + section.slice(1)}
               </button>
             ))}
           </div>
@@ -1334,39 +1321,39 @@ function ListingsPanel({
           {activeFormSection === "about" && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs text-white/60 mb-2">About</label>
-          <Textarea
-            value={draft.description}
-            onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-                  placeholder="Enter description and details..."
-                  className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
+                <label className="block text-xs text-white/60 mb-2">Website</label>
+                <Input
+                  value={draft.website}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, website: event.target.value }))}
+                  placeholder="https://example.com"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
                 />
               </div>
 
-              {/* Mission */}
-              <div className="pt-4 border-t border-white/10">
-                <label className="block text-xs text-white/60 mb-2">Mission</label>
-                <Textarea
-                  value={draft.mission}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, mission: event.target.value }))}
-                  placeholder="Enter mission statement..."
-                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
+              {!isCollegesForm && (
+                <div>
+                  <label className="block text-xs text-white/60 mb-2">Logo URL</label>
+                  <Input
+                    value={draft.logoUrl}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
+                    placeholder="https://example.com/logo.png"
+                    className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs text-white/60 mb-2">Founded In</label>
+                <Input
+                  type="text"
+                  value={draft.founded}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
+                  placeholder="Enter founding year (e.g., 1995)"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
                 />
               </div>
 
-              {/* Vision */}
-              <div className="pt-4 border-t border-white/10">
-                <label className="block text-xs text-white/60 mb-2">Vision</label>
-                <Textarea
-                  value={draft.vision}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, vision: event.target.value }))}
-                  placeholder="Enter vision statement..."
-                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              {/* Total Number of Faculty */}
-              <div className="pt-4 border-t border-white/10">
+              <div>
                 <label className="block text-xs text-white/60 mb-2">Total Number of Faculty</label>
                 <Input
                   type="number"
@@ -1377,18 +1364,106 @@ function ListingsPanel({
                 />
               </div>
 
-              {/* Founded In */}
-              <div className="pt-4 border-t border-white/10">
-                <label className="block text-xs text-white/60 mb-2">Founded In</label>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Input
-                  type="text"
-                  value={draft.founded}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
-                  placeholder="Enter founding year (e.g., 1995)"
+                  value={draft.city}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, city: event.target.value }))}
+                  placeholder="City"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+                <Input
+                  value={draft.state}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, state: event.target.value }))}
+                  placeholder="State"
                   className="h-10 bg-white/10 text-white placeholder:text-white/40"
                 />
               </div>
-              
+
+              <div>
+                <label className="block text-xs text-white/60 mb-2">Location URL (Google Maps / Apple Maps)</label>
+                <Input
+                  value={draft.locationLink}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, locationLink: event.target.value }))}
+                  placeholder="https://maps.google.com/... or https://maps.apple.com/..."
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+                {draft.locationLink && (
+                  <div className="mt-2">
+                    <a
+                      href={draft.locationLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-xs font-semibold text-orange-500 hover:text-orange-400"
+                    >
+                      Preview Location Link
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs text-white/60 mb-2">Mission</label>
+                <Textarea
+                  value={draft.mission}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, mission: event.target.value }))}
+                  placeholder="Enter mission statement..."
+                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-white/60 mb-2">Vision</label>
+                <Textarea
+                  value={draft.vision}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, vision: event.target.value }))}
+                  placeholder="Enter vision statement..."
+                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  value={draft.type}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
+                  placeholder="Type (e.g., Public)"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+                <Input
+                  value={draft.revenue}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
+                  placeholder="Revenue"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  type="number"
+                  min="0"
+                  value={draft.locationsCount}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
+                  placeholder="Locations count"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+                <Input
+                  value={draft.industry}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
+                  placeholder="Industry"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-white/60 mb-2">About</label>
+                <Textarea
+                  value={draft.description}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+                  placeholder="Enter description and details..."
+                  className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
+                />
+              </div>
+
               {/* CEO Information */}
               <div className="space-y-3 pt-4 border-t border-white/10">
                 <label className="block text-xs text-white/60 mb-2">CEO Information</label>
@@ -1575,34 +1650,6 @@ function ListingsPanel({
                 placeholder="Enter additional information..."
                 className="min-h-[100px] bg-white/10 text-white placeholder:text-white/40 w-full"
               />
-              
-              {/* Location Link Field */}
-              <div className="mt-4">
-                <label className="block text-xs text-white/60 mb-2">Location Link (Google Maps / Maps)</label>
-                <p className="text-xs text-white/40 mb-2">
-                  Enter the Google Maps or Apple Maps link. This will be displayed in orange on the frontend.
-                </p>
-                <Input
-                  value={draft.locationLink}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, locationLink: event.target.value }))}
-                  placeholder="https://maps.google.com/... or https://maps.apple.com/..."
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                  disabled={saving}
-                />
-                {draft.locationLink && (
-                  <div className="mt-2">
-                    <a
-                      href={draft.locationLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-xs font-semibold text-orange-500 hover:text-orange-400"
-                    >
-                      Preview Location Link
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
-              </div>
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
                 <Input
                   type="number"
