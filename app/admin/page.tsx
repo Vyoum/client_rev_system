@@ -834,7 +834,7 @@ function ListingsPanel({
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
-  const isCollegesForm = collectionName === "colleges"
+  const isCollegeLikeForm = ["colleges", "school", "kindergarden"].includes(collectionName)
   const isCoursesForm = collectionName === "courses"
 
   const filteredItems = useMemo(() => {
@@ -1291,7 +1291,7 @@ function ListingsPanel({
             placeholder={`${label} name`}
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
-          {isCollegesForm && (
+          {isCollegeLikeForm && (
             <Input
               value={draft.logoUrl}
               onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
@@ -1363,7 +1363,7 @@ function ListingsPanel({
                 />
               </div>
 
-              {!isCollegesForm && (
+              {!isCollegeLikeForm && (
                 <div>
                   <label className="block text-xs text-white/60 mb-2">Logo URL</label>
                   <Input
