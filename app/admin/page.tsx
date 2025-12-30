@@ -63,10 +63,9 @@ type ListingItem = {
   mission?: string
   vision?: string
   facultyCount?: number | null
+  collegeStats?: Record<string, { facultyMembers?: number | null; studentsEnrolled?: number | null }>
   courseName?: string
   courseField?: string
-  courseFacultyMembers?: number | null
-  courseStudentsEnrolled?: number | null
 }
 
 type ReviewItem = {
@@ -155,6 +154,24 @@ const parseOptionalNumber = (value: unknown): number | null => {
 
 const mapListingData = (doc: any): ListingItem => {
   const data = doc.data()
+  const rawCollegeStats =
+    data.collegeStats && typeof data.collegeStats === "object" ? (data.collegeStats as Record<string, unknown>) : {}
+  const collegeStats = Object.entries(rawCollegeStats).reduce<Record<string, { facultyMembers?: number | null; studentsEnrolled?: number | null }>>(
+    (acc, [collegeId, value]) => {
+      if (!value || typeof value !== "object") return acc
+      const stats = value as Record<string, unknown>
+      const facultyMembers = parseOptionalNumber(stats.facultyMembers)
+      const studentsEnrolled = parseOptionalNumber(stats.studentsEnrolled)
+      if (facultyMembers === null && studentsEnrolled === null) return acc
+      acc[collegeId] = {
+        ...(facultyMembers !== null ? { facultyMembers } : {}),
+        ...(studentsEnrolled !== null ? { studentsEnrolled } : {}),
+      }
+      return acc
+    },
+    {}
+  )
+
   return {
     id: doc.id,
     name: data.name || "",
@@ -174,10 +191,9 @@ const mapListingData = (doc: any): ListingItem => {
     mission: typeof data.mission === "string" ? data.mission : "",
     vision: typeof data.vision === "string" ? data.vision : "",
     facultyCount: parseOptionalNumber(data.facultyCount),
+    collegeStats,
     courseName: typeof data.courseName === "string" ? data.courseName : "",
     courseField: typeof data.courseField === "string" ? data.courseField : "",
-    courseFacultyMembers: parseOptionalNumber(data.courseFacultyMembers),
-    courseStudentsEnrolled: parseOptionalNumber(data.courseStudentsEnrolled),
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toLocaleString() : new Date().toLocaleString(),
     createdAt: data.createdAt,
     rating: parseOptionalNumber(data.rating),
@@ -1035,10 +1051,9 @@ function ListingsPanel({
     mission: "",
     vision: "",
     facultyCount: "",
+    collegeStats: {} as Record<string, { facultyMembers: string; studentsEnrolled: string }>,
     courseName: "",
     courseField: "",
-    courseFacultyMembers: "",
-    courseStudentsEnrolled: "",
   })
   const [activeFormSection, setActiveFormSection] = useState<"whatsnew" | "reviews" | "about" | "photos" | "others">("whatsnew")
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -1056,7 +1071,9 @@ function ListingsPanel({
   const [collegeOptions, setCollegeOptions] = useState<Array<{ id: string; name: string; city: string; state: string; status: ListingStatus }>>([])
   const [collegeOptionsLoading, setCollegeOptionsLoading] = useState(false)
   const [collegeSearch, setCollegeSearch] = useState("")
-  const [newCollegeEntries, setNewCollegeEntries] = useState<Array<{ name: string; city: string; state: string }>>([])
+  const [newCollegeEntries, setNewCollegeEntries] = useState<
+    Array<{ name: string; city: string; state: string; facultyMembers: string; studentsEnrolled: string }>
+  >([])
   const [seedingCourses, setSeedingCourses] = useState(false)
   const [seedInfo, setSeedInfo] = useState<string | null>(null)
   const [nirfImporting, setNirfImporting] = useState(false)
@@ -1357,10 +1374,9 @@ function ListingsPanel({
       mission: "",
       vision: "",
       facultyCount: "",
+      collegeStats: {} as Record<string, { facultyMembers: string; studentsEnrolled: string }>,
       courseName: "",
       courseField: "",
-      courseFacultyMembers: "",
-      courseStudentsEnrolled: "",
     })
     setEditingId(null)
     setFormError(null)
@@ -1482,10 +1498,12 @@ function ListingsPanel({
             name: entry.name.trim(),
             city: entry.city.trim(),
             state: entry.state.trim(),
+            facultyMembers: entry.facultyMembers.trim(),
+            studentsEnrolled: entry.studentsEnrolled.trim(),
           }))
         : []
       const hasInvalidNewCollege = trimmedNewCollegeEntries.some(
-        (entry) => !entry.name && (entry.city || entry.state)
+        (entry) => !entry.name && (entry.city || entry.state || entry.facultyMembers || entry.studentsEnrolled)
       )
       if (hasInvalidNewCollege) {
         setFormError("Please enter a college name for each added row or remove the empty row.")
@@ -1521,14 +1539,24 @@ function ListingsPanel({
       const courseField = draft.courseField.trim()
       if (courseField) listingData.courseField = courseField
 
-      const courseFacultyMembers = parseOptionalNumber(draft.courseFacultyMembers)
-      if (courseFacultyMembers !== null) listingData.courseFacultyMembers = courseFacultyMembers
-
-      const courseStudentsEnrolled = parseOptionalNumber(draft.courseStudentsEnrolled)
-      if (courseStudentsEnrolled !== null) listingData.courseStudentsEnrolled = courseStudentsEnrolled
-
       if (isCoursesForm) {
+        const nextCollegeStats = nextCollegeIds.reduce<Record<string, { facultyMembers?: number; studentsEnrolled?: number }>>(
+          (acc, collegeId) => {
+            const stats = draft.collegeStats?.[collegeId]
+            if (!stats) return acc
+            const facultyMembers = parseOptionalNumber(stats.facultyMembers)
+            const studentsEnrolled = parseOptionalNumber(stats.studentsEnrolled)
+            if (facultyMembers === null && studentsEnrolled === null) return acc
+            acc[collegeId] = {
+              ...(facultyMembers !== null ? { facultyMembers } : {}),
+              ...(studentsEnrolled !== null ? { studentsEnrolled } : {}),
+            }
+            return acc
+          },
+          {}
+        )
         listingData.collegeIds = nextCollegeIds
+        listingData.collegeStats = nextCollegeStats
       }
 
       // Add Mission field
@@ -1693,10 +1721,19 @@ function ListingsPanel({
       if (isCoursesForm && savedId && newCollegesToCreate.length > 0) {
         const batch = writeBatch(db)
         const newCollegeIds: string[] = []
+        const collegeStatsUpdates: Record<string, unknown> = {}
         newCollegesToCreate.forEach((entry) => {
           const collegeRef = doc(collection(db, "colleges"))
           newCollegeIds.push(collegeRef.id)
           const location = [entry.city, entry.state].filter(Boolean).join(", ")
+          const facultyMembers = parseOptionalNumber(entry.facultyMembers)
+          const studentsEnrolled = parseOptionalNumber(entry.studentsEnrolled)
+          if (facultyMembers !== null || studentsEnrolled !== null) {
+            collegeStatsUpdates[`collegeStats.${collegeRef.id}`] = {
+              ...(facultyMembers !== null ? { facultyMembers } : {}),
+              ...(studentsEnrolled !== null ? { studentsEnrolled } : {}),
+            }
+          }
           batch.set(collegeRef, {
             name: entry.name,
             city: entry.city || "",
@@ -1708,10 +1745,12 @@ function ListingsPanel({
             updatedAt: serverTimestamp(),
           })
         })
-        batch.update(doc(db, "courses", savedId), {
+        const courseUpdate: Record<string, unknown> = {
           collegeIds: arrayUnion(...newCollegeIds),
           updatedAt: serverTimestamp(),
-        })
+        }
+        Object.assign(courseUpdate, collegeStatsUpdates)
+        batch.update(doc(db, "courses", savedId), courseUpdate)
         await batch.commit()
       }
 
@@ -1755,10 +1794,21 @@ function ListingsPanel({
       mission: item.mission || "",
       vision: item.vision || "",
       facultyCount: item.facultyCount != null ? String(item.facultyCount) : "",
+      collegeStats: item.collegeStats
+        ? Object.fromEntries(
+            Object.entries(item.collegeStats).map(([collegeId, stats]) => [
+              collegeId,
+              {
+                facultyMembers:
+                  stats?.facultyMembers != null ? String(stats.facultyMembers) : "",
+                studentsEnrolled:
+                  stats?.studentsEnrolled != null ? String(stats.studentsEnrolled) : "",
+              },
+            ])
+          )
+        : {},
       courseName: item.courseName || "",
       courseField: item.courseField || "",
-      courseFacultyMembers: item.courseFacultyMembers != null ? String(item.courseFacultyMembers) : "",
-      courseStudentsEnrolled: item.courseStudentsEnrolled != null ? String(item.courseStudentsEnrolled) : "",
     })
     setEditingId(item.id)
     setFormError(null)
@@ -2501,39 +2551,93 @@ function ListingsPanel({
                 ) : filteredCollegeOptions.length === 0 ? (
                   <p className="text-sm text-white/60">No colleges found.</p>
                 ) : (
-                  filteredCollegeOptions.map((college) => {
-                    const checked = draft.collegeIds.includes(college.id)
-                    const subheading = [college.city, college.state].filter(Boolean).join(", ")
-                    return (
-                      <label
-                        key={college.id}
-                        className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 cursor-pointer hover:bg-white/10"
-                      >
-                        <input
-                          type="checkbox"
-                          className="mt-1 accent-orange-500"
-                          checked={checked}
-                          onChange={(event) => {
-                            const isChecked = event.target.checked
-                            setDraft((prev) => {
-                              const nextIds = isChecked
-                                ? Array.from(new Set([...prev.collegeIds, college.id]))
-                                : prev.collegeIds.filter((id) => id !== college.id)
-                              return { ...prev, collegeIds: nextIds }
-                            })
-                          }}
-                          disabled={saving}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
-                          {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
-                        </div>
-                        <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
-                          {college.status}
-                        </span>
-                      </label>
-                    )
-                  })
+                      filteredCollegeOptions.map((college) => {
+                        const checked = draft.collegeIds.includes(college.id)
+                        const subheading = [college.city, college.state].filter(Boolean).join(", ")
+                        const stats = draft.collegeStats?.[college.id] ?? {
+                          facultyMembers: "",
+                          studentsEnrolled: "",
+                        }
+                        return (
+                          <div
+                            key={college.id}
+                            className="flex flex-wrap items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10"
+                          >
+                            <input
+                              type="checkbox"
+                              className="mt-1 accent-orange-500"
+                              checked={checked}
+                              onChange={(event) => {
+                                const isChecked = event.target.checked
+                                setDraft((prev) => {
+                                  const nextIds = isChecked
+                                    ? Array.from(new Set([...prev.collegeIds, college.id]))
+                                    : prev.collegeIds.filter((id) => id !== college.id)
+                                  return { ...prev, collegeIds: nextIds }
+                                })
+                              }}
+                              disabled={saving}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
+                              {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                value={stats.facultyMembers}
+                                onChange={(event) => {
+                                  const value = event.target.value
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    collegeStats: {
+                                      ...prev.collegeStats,
+                                      [college.id]: {
+                                        ...(prev.collegeStats?.[college.id] ?? {
+                                          facultyMembers: "",
+                                          studentsEnrolled: "",
+                                        }),
+                                        facultyMembers: value,
+                                      },
+                                    },
+                                  }))
+                                }}
+                                placeholder="Faculty"
+                                className="h-8 w-24 bg-white/10 text-white placeholder:text-white/40"
+                                disabled={!checked || saving}
+                              />
+                              <Input
+                                type="number"
+                                min="0"
+                                value={stats.studentsEnrolled}
+                                onChange={(event) => {
+                                  const value = event.target.value
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    collegeStats: {
+                                      ...prev.collegeStats,
+                                      [college.id]: {
+                                        ...(prev.collegeStats?.[college.id] ?? {
+                                          facultyMembers: "",
+                                          studentsEnrolled: "",
+                                        }),
+                                        studentsEnrolled: value,
+                                      },
+                                    },
+                                  }))
+                                }}
+                                placeholder="Enrolled"
+                                className="h-8 w-24 bg-white/10 text-white placeholder:text-white/40"
+                                disabled={!checked || saving}
+                              />
+                            </div>
+                            <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
+                              {college.status}
+                            </span>
+                          </div>
+                        )
+                      })
                 )}
               </div>
             </div>
@@ -2547,7 +2651,10 @@ function ListingsPanel({
                 <button
                   type="button"
                   onClick={() =>
-                    setNewCollegeEntries((prev) => [...prev, { name: "", city: "", state: "" }])
+                    setNewCollegeEntries((prev) => [
+                      ...prev,
+                      { name: "", city: "", state: "", facultyMembers: "", studentsEnrolled: "" },
+                    ])
                   }
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white hover:bg-white/20"
                   aria-label="Add college row"
@@ -2564,7 +2671,7 @@ function ListingsPanel({
                   {newCollegeEntries.map((entry, index) => (
                     <div
                       key={`new-college-${index}`}
-                      className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto] items-start"
+                      className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-start"
                     >
                       <Input
                         value={entry.name}
@@ -2605,6 +2712,38 @@ function ListingsPanel({
                           )
                         }}
                         placeholder="State"
+                        className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                        disabled={saving}
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        value={entry.facultyMembers}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setNewCollegeEntries((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, facultyMembers: value } : item
+                            )
+                          )
+                        }}
+                        placeholder="Faculty"
+                        className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                        disabled={saving}
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        value={entry.studentsEnrolled}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setNewCollegeEntries((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, studentsEnrolled: value } : item
+                            )
+                          )
+                        }}
+                        placeholder="Enrolled"
                         className="h-9 bg-white/10 text-white placeholder:text-white/40"
                         disabled={saving}
                       />

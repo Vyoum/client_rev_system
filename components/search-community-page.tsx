@@ -60,8 +60,7 @@ type ListingItem = {
   others?: string
   courseName?: string
   courseField?: string
-  courseFacultyMembers?: number | null
-  courseStudentsEnrolled?: number | null
+  collegeStats?: Record<string, { facultyMembers?: number | null; studentsEnrolled?: number | null }>
   mission?: string
   vision?: string
   facultyCount?: number | null
@@ -679,6 +678,24 @@ export default function SearchCommunityPage() {
             const data = doc.data()
             const city = typeof data.city === "string" ? data.city : ""
             const state = typeof data.state === "string" ? data.state : ""
+            const rawCollegeStats =
+              data.collegeStats && typeof data.collegeStats === "object"
+                ? (data.collegeStats as Record<string, unknown>)
+                : {}
+            const collegeStats = Object.entries(rawCollegeStats).reduce<
+              Record<string, { facultyMembers?: number | null; studentsEnrolled?: number | null }>
+            >((acc, [collegeId, value]) => {
+              if (!value || typeof value !== "object") return acc
+              const stats = value as Record<string, unknown>
+              const facultyMembers = parseNumber(stats.facultyMembers)
+              const studentsEnrolled = parseNumber(stats.studentsEnrolled)
+              if (facultyMembers === null && studentsEnrolled === null) return acc
+              acc[collegeId] = {
+                ...(facultyMembers !== null ? { facultyMembers } : {}),
+                ...(studentsEnrolled !== null ? { studentsEnrolled } : {}),
+              }
+              return acc
+            }, {})
             return {
               id: doc.id,
               name: data.name || "",
@@ -709,8 +726,7 @@ export default function SearchCommunityPage() {
               others: typeof data.others === "string" ? data.others : "",
               courseName: typeof data.courseName === "string" ? data.courseName : "",
               courseField: typeof data.courseField === "string" ? data.courseField : "",
-              courseFacultyMembers: parseNumber(data.courseFacultyMembers),
-              courseStudentsEnrolled: parseNumber(data.courseStudentsEnrolled),
+              collegeStats,
               ceoName: typeof data.ceoName === "string" ? data.ceoName : "",
               ceoPhotoUrl: typeof data.ceoPhotoUrl === "string" ? data.ceoPhotoUrl : "",
             }
@@ -856,7 +872,7 @@ export default function SearchCommunityPage() {
       )
     }
 
-    if (activeTab === "Colleges" || activeTab === "School") {
+    if (activeTab === "Colleges" || activeTab === "School" || activeTab === "Kindergarden") {
       return filtered
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
@@ -896,12 +912,6 @@ export default function SearchCommunityPage() {
     ? [
         selectedListing.courseName ? `Course name: ${selectedListing.courseName}` : null,
         selectedListing.courseField ? `Course field: ${selectedListing.courseField}` : null,
-        typeof selectedListing.courseFacultyMembers === "number"
-          ? `Faculty members: ${selectedListing.courseFacultyMembers.toLocaleString()}`
-          : null,
-        typeof selectedListing.courseStudentsEnrolled === "number"
-          ? `Students currently enrolled: ${selectedListing.courseStudentsEnrolled.toLocaleString()}`
-          : null,
       ].filter((line): line is string => Boolean(line))
     : []
 
@@ -1618,11 +1628,9 @@ export default function SearchCommunityPage() {
               )}
 
               <div className="rounded-2xl border border-[#E5E7EB] bg-white overflow-hidden">
-                <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 px-5 py-3 text-xs font-semibold text-[#6B7280] bg-[#F9FAFB]">
+                <div className="hidden sm:grid grid-cols-[1.6fr_1fr_28px] gap-3 px-5 py-3 text-xs font-semibold text-[#6B7280] bg-[#F9FAFB]">
                   <span>Course</span>
                   <span>Field</span>
-                  <span>Faculty</span>
-                  <span>Enrolled</span>
                   <span />
                 </div>
 
@@ -1630,14 +1638,6 @@ export default function SearchCommunityPage() {
                   {filteredListings.map((course) => {
                     const courseName = course.courseName || course.name || "Untitled course"
                     const courseField = course.courseField || "—"
-                    const facultyMembers =
-                      typeof course.courseFacultyMembers === "number"
-                        ? course.courseFacultyMembers.toLocaleString()
-                        : "—"
-                    const studentsEnrolled =
-                      typeof course.courseStudentsEnrolled === "number"
-                        ? course.courseStudentsEnrolled.toLocaleString()
-                        : "—"
                     const isExpanded = expandedCourseId === course.id
 
                     return (
@@ -1650,13 +1650,7 @@ export default function SearchCommunityPage() {
                           <div className="flex items-start gap-3 sm:hidden">
                             <div className="min-w-0 flex-1">
                               <p className="text-base font-semibold text-[#111827] truncate">{courseName}</p>
-                              <p className="mt-1 text-sm text-[#6B7280]">
-                                {courseField}
-                                {(facultyMembers !== "—" || studentsEnrolled !== "—") && " · "}
-                                {facultyMembers !== "—" ? `${facultyMembers} faculty` : null}
-                                {facultyMembers !== "—" && studentsEnrolled !== "—" ? " · " : null}
-                                {studentsEnrolled !== "—" ? `${studentsEnrolled} enrolled` : null}
-                              </p>
+                              <p className="mt-1 text-sm text-[#6B7280]">{courseField}</p>
                             </div>
                             <ChevronRight
                               className={`mt-0.5 h-5 w-5 text-orange-500 transition-transform ${
@@ -1665,11 +1659,9 @@ export default function SearchCommunityPage() {
                             />
                           </div>
 
-                          <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 items-center">
+                          <div className="hidden sm:grid grid-cols-[1.6fr_1fr_28px] gap-3 items-center">
                             <span className="text-sm font-semibold text-[#111827]">{courseName}</span>
                             <span className="text-sm text-[#6B7280]">{courseField}</span>
-                            <span className="text-sm text-[#111827]">{facultyMembers}</span>
-                            <span className="text-sm text-[#111827]">{studentsEnrolled}</span>
                             <ChevronRight
                               className={`h-5 w-5 text-orange-500 transition-transform justify-self-end ${
                                 isExpanded ? "rotate-90" : ""
@@ -1696,6 +1688,9 @@ export default function SearchCommunityPage() {
                               <div className="mt-3 space-y-2">
                                 {expandedCourseColleges.map((college) => {
                                   const location = [college.city, college.state].filter(Boolean).join(", ")
+                                  const stats = course.collegeStats?.[college.id]
+                                  const facultyMembers = stats?.facultyMembers
+                                  const studentsEnrolled = stats?.studentsEnrolled
                                   return (
                                     <div
                                       key={college.id}
@@ -1705,6 +1700,17 @@ export default function SearchCommunityPage() {
                                         {college.name || "Untitled college"}
                                       </p>
                                       {location && <p className="text-xs text-[#6B7280]">{location}</p>}
+                                      {(facultyMembers != null || studentsEnrolled != null) && (
+                                        <p className="mt-1 text-xs text-[#6B7280]">
+                                          {facultyMembers != null
+                                            ? `Faculty: ${facultyMembers.toLocaleString()}`
+                                            : null}
+                                          {facultyMembers != null && studentsEnrolled != null ? " · " : null}
+                                          {studentsEnrolled != null
+                                            ? `Enrolled: ${studentsEnrolled.toLocaleString()}`
+                                            : null}
+                                        </p>
+                                      )}
                                     </div>
                                   )
                                 })}
@@ -1950,10 +1956,8 @@ function CourseRowsSkeleton() {
     <div className="space-y-4 animate-pulse">
       <div className="h-4 w-48 rounded-full bg-[#E5E7EB]" />
       <div className="rounded-2xl border border-[#E5E7EB] bg-white overflow-hidden">
-        <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 px-5 py-3 bg-[#F9FAFB]">
+        <div className="hidden sm:grid grid-cols-[1.6fr_1fr_28px] gap-3 px-5 py-3 bg-[#F9FAFB]">
           <div className="h-3 w-24 rounded bg-[#E5E7EB]" />
-          <div className="h-3 w-16 rounded bg-[#E5E7EB]" />
-          <div className="h-3 w-12 rounded bg-[#E5E7EB]" />
           <div className="h-3 w-16 rounded bg-[#E5E7EB]" />
           <div className="h-3 w-6 rounded bg-[#E5E7EB] justify-self-end" />
         </div>
@@ -1967,11 +1971,9 @@ function CourseRowsSkeleton() {
                 </div>
                 <div className="h-5 w-5 rounded bg-[#E5E7EB]" />
               </div>
-              <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.8fr_1fr_28px] gap-3 items-center">
+              <div className="hidden sm:grid grid-cols-[1.6fr_1fr_28px] gap-3 items-center">
                 <div className="h-4 w-44 rounded bg-[#E5E7EB]" />
                 <div className="h-3 w-24 rounded bg-[#E5E7EB]" />
-                <div className="h-3 w-16 rounded bg-[#E5E7EB]" />
-                <div className="h-3 w-20 rounded bg-[#E5E7EB]" />
                 <div className="h-5 w-5 rounded bg-[#E5E7EB] justify-self-end" />
               </div>
             </div>
