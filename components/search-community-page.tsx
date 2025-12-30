@@ -925,7 +925,7 @@ export default function SearchCommunityPage() {
       </header>
 
       {selectedListing ? (
-        <div className="px-4 sm:px-5 mt-2 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full pb-10">
+        <div className="flex-1 px-4 sm:px-5 mt-2 max-w-[430px] md:max-w-[720px] lg:max-w-[860px] mx-auto w-full pb-10">
           <div className="flex items-center justify-between gap-4 pl-12 sm:pl-14">
             <div className="flex items-center gap-3">
               {selectedListing.logoUrl ? (
