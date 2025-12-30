@@ -856,6 +856,12 @@ export default function SearchCommunityPage() {
       )
     }
 
+    if (activeTab === "Colleges") {
+      return filtered
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
+    }
+
     return filtered
   }, [listings, searchQuery, selectedState, selectedCity, activeTab])
 

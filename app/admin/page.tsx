@@ -1050,6 +1050,7 @@ function ListingsPanel({
   const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
   const isCollegeLikeForm = ["colleges", "school", "kindergarden"].includes(collectionName)
   const isCoursesForm = collectionName === "courses"
+  const isFeedForm = collectionName === "feed"
   const isCollegesCollection = collectionName === "colleges"
   const [collegeOptions, setCollegeOptions] = useState<Array<{ id: string; name: string; city: string; state: string; status: ListingStatus }>>([])
   const [collegeOptionsLoading, setCollegeOptionsLoading] = useState(false)
@@ -1332,6 +1333,17 @@ function ListingsPanel({
       return
     }
 
+    if (isFeedForm) {
+      const selectedFile = imageFiles[0]
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setFormError("Some files are too large. Maximum file size is 10MB.")
+        return
+      }
+      setPhotoFiles([selectedFile])
+      setFormError(null)
+      return
+    }
+
     // Limit to 10 photos total
     const existingUrls = draft.photos
       .split("\n")
@@ -1504,34 +1516,43 @@ function ListingsPanel({
       // Collect photo URLs
       let photoUrls: string[] = []
 
-      // Parse photos from textarea (one URL per line)
-      const photosText = draft.photos.trim()
-      if (photosText) {
-        const photosArray = photosText
-          .split("\n")
-          .map((url) => url.trim())
-          .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))
-        photoUrls = [...photoUrls, ...photosArray]
+      if (!isFeedForm) {
+        // Parse photos from textarea (one URL per line)
+        const photosText = draft.photos.trim()
+        if (photosText) {
+          const photosArray = photosText
+            .split("\n")
+            .map((url) => url.trim())
+            .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))
+          photoUrls = [...photoUrls, ...photosArray]
+        }
       }
 
       // Upload new photo files to Cloudinary
       if (photoFiles.length > 0) {
         setUploadingPhotos(true)
         try {
-          const uploadPromises = photoFiles.map(async (file, index) => {
-            try {
-              const url = await uploadToCloudinary(file, index)
-              setUploadProgress((prev) => ({ ...prev, [index]: 100 }))
-              return url
-            } catch (error) {
-              console.error(`Failed to upload ${file.name}:`, error)
-              throw error
-            }
-          })
+          if (isFeedForm) {
+            const file = photoFiles[0]
+            const url = await uploadToCloudinary(file, 0)
+            listingData.logoUrl = url
+            setUploadProgress((prev) => ({ ...prev, 0: 100 }))
+          } else {
+            const uploadPromises = photoFiles.map(async (file, index) => {
+              try {
+                const url = await uploadToCloudinary(file, index)
+                setUploadProgress((prev) => ({ ...prev, [index]: 100 }))
+                return url
+              } catch (error) {
+                console.error(`Failed to upload ${file.name}:`, error)
+                throw error
+              }
+            })
 
-          const uploadedUrls = await Promise.all(uploadPromises)
-          photoUrls = [...photoUrls, ...uploadedUrls]
-          console.log("All photos uploaded successfully to Cloudinary")
+            const uploadedUrls = await Promise.all(uploadPromises)
+            photoUrls = [...photoUrls, ...uploadedUrls]
+            console.log("All photos uploaded successfully to Cloudinary")
+          }
         } catch (error: any) {
           console.error("Error uploading photos to Cloudinary:", error)
           const errorMessage = error?.message || "Unknown error occurred"
@@ -1554,7 +1575,7 @@ function ListingsPanel({
       }
 
       // Add photos to listing data
-      if (photoUrls.length > 0) {
+      if (!isFeedForm && photoUrls.length > 0) {
         listingData.photos = photoUrls
       }
 
@@ -1794,7 +1815,7 @@ function ListingsPanel({
           <Input
             value={draft.name}
             onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder={isCoursesForm ? "Course name" : `${label} name`}
+            placeholder={isCoursesForm ? "Course name" : isFeedForm ? "Heading" : `${label} name`}
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
           {isCollegeLikeForm && (
@@ -1807,7 +1828,101 @@ function ListingsPanel({
           )}
         </div>
 
-        {!isCoursesForm && (
+        {isFeedForm && (
+          <div className="mt-6 space-y-4">
+            <div>
+              <label className="block text-xs text-white/60 mb-2">Sub heading</label>
+              <Textarea
+                value={draft.description}
+                onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+                placeholder="Enter sub heading..."
+                className="min-h-[110px] bg-white/10 text-white placeholder:text-white/40"
+              />
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-white/70">Feed image</p>
+                {photoFiles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => removePhotoFile(0)}
+                    className="inline-flex items-center gap-2 text-xs text-white/60 hover:text-white"
+                    disabled={uploadingPhotos || saving}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                <div className="flex flex-col items-center justify-center pt-4 pb-5">
+                  <Upload className="h-6 w-6 text-white/60 mb-2" />
+                  <p className="text-sm text-white/80 font-medium">
+                    {uploadingPhotos ? "Uploading..." : "Click to upload image"}
+                  </p>
+                  <p className="text-xs text-white/50 mt-1">PNG, JPG, GIF up to 10MB</p>
+                </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  disabled={uploadingPhotos || saving}
+                />
+              </label>
+
+              {photoFiles.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={URL.createObjectURL(photoFiles[0])}
+                    alt="Feed preview"
+                    className="h-16 w-16 rounded-lg border border-white/10 object-cover"
+                  />
+                  <div className="text-xs text-white/60">
+                    <p className="font-semibold text-white/80">{photoFiles[0].name}</p>
+                    <p>{(photoFiles[0].size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                </div>
+              )}
+
+              {!photoFiles.length && draft.logoUrl && (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={draft.logoUrl}
+                    alt="Feed image"
+                    className="h-16 w-16 rounded-lg border border-white/10 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none"
+                    }}
+                  />
+                  <p className="text-xs text-white/60">Current image URL</p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs text-white/60 mb-2">Image URL (optional)</label>
+                <Input
+                  value={draft.logoUrl}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
+                  placeholder="https://example.com/image.png"
+                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                  disabled={uploadingPhotos || saving}
+                />
+              </div>
+
+              {(!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || !process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) && (
+                <div className="mt-2 p-3 rounded-lg border border-orange-500/30 bg-orange-500/10">
+                  <p className="text-xs text-orange-300 mb-2 font-semibold">⚠️ Cloudinary Not Configured</p>
+                  <p className="text-xs text-orange-200/80">
+                    Add Cloudinary env vars to enable image uploads (see CLOUDINARY_SETUP.md).
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!isCoursesForm && !isFeedForm && (
           <>
             {/* Form Sections Tabs */}
             <div className="mt-6 border-b border-white/10">
@@ -2185,185 +2300,6 @@ function ListingsPanel({
               {activeFormSection === "others" && (
                 <div className="space-y-3 w-full">
                   <label className="block text-xs text-white/60 mb-2">Courses</label>
-                  {isCoursesForm && (
-                    <div className="space-y-3">
-                      <Input
-                        value={draft.courseName}
-                        onChange={(event) => setDraft((prev) => ({ ...prev, courseName: event.target.value }))}
-                        placeholder="Course name"
-                        className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                      />
-                      <Input
-                        value={draft.courseField}
-                        onChange={(event) => setDraft((prev) => ({ ...prev, courseField: event.target.value }))}
-                        placeholder="Course field"
-                        className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                      />
-                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={draft.courseFacultyMembers}
-                          onChange={(event) => setDraft((prev) => ({ ...prev, courseFacultyMembers: event.target.value }))}
-                          placeholder="Faculty members"
-                          className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                        />
-                        <Input
-                          type="number"
-                          min="0"
-                          value={draft.courseStudentsEnrolled}
-                          onChange={(event) => setDraft((prev) => ({ ...prev, courseStudentsEnrolled: event.target.value }))}
-                          placeholder="Students currently enrolled"
-                          className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {isCoursesForm && (
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold text-white/70">Colleges offering this course</p>
-                        <p className="text-xs text-white/50">{draft.collegeIds.length} selected</p>
-                      </div>
-                      <Input
-                        value={collegeSearch}
-                        onChange={(event) => setCollegeSearch(event.target.value)}
-                        placeholder="Search colleges"
-                        className="h-9 bg-white/10 text-white placeholder:text-white/40 w-full"
-                        disabled={saving}
-                      />
-                      <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                        {collegeOptionsLoading ? (
-                          <p className="text-sm text-white/60">Loading colleges...</p>
-                        ) : filteredCollegeOptions.length === 0 ? (
-                          <p className="text-sm text-white/60">No colleges found.</p>
-                        ) : (
-                          filteredCollegeOptions.map((college) => {
-                            const checked = draft.collegeIds.includes(college.id)
-                            const subheading = [college.city, college.state].filter(Boolean).join(", ")
-                            return (
-                              <label
-                                key={college.id}
-                                className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 cursor-pointer hover:bg-white/10"
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="mt-1 accent-orange-500"
-                                  checked={checked}
-                                  onChange={(event) => {
-                                    const isChecked = event.target.checked
-                                    setDraft((prev) => {
-                                      const nextIds = isChecked
-                                        ? Array.from(new Set([...prev.collegeIds, college.id]))
-                                        : prev.collegeIds.filter((id) => id !== college.id)
-                                      return { ...prev, collegeIds: nextIds }
-                                    })
-                                  }}
-                                  disabled={saving}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
-                                  {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
-                                </div>
-                                <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
-                                  {college.status}
-                                </span>
-                              </label>
-                            )
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {isCoursesForm && (
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold text-white/70">Add new colleges</p>
-                          <p className="text-[11px] text-white/50">Create as many rows as needed.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setNewCollegeEntries((prev) => [...prev, { name: "", city: "", state: "" }])
-                          }
-                          className="h-8 rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
-                          disabled={saving}
-                        >
-                          Add college
-                        </button>
-                      </div>
-                      {newCollegeEntries.length === 0 ? (
-                        <p className="text-xs text-white/50">No new colleges added yet.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {newCollegeEntries.map((entry, index) => (
-                            <div
-                              key={`new-college-${index}`}
-                              className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto] items-start"
-                            >
-                              <Input
-                                value={entry.name}
-                                onChange={(event) => {
-                                  const value = event.target.value
-                                  setNewCollegeEntries((prev) =>
-                                    prev.map((item, itemIndex) =>
-                                      itemIndex === index ? { ...item, name: value } : item
-                                    )
-                                  )
-                                }}
-                                placeholder="College name"
-                                className="h-9 bg-white/10 text-white placeholder:text-white/40"
-                                disabled={saving}
-                              />
-                              <Input
-                                value={entry.city}
-                                onChange={(event) => {
-                                  const value = event.target.value
-                                  setNewCollegeEntries((prev) =>
-                                    prev.map((item, itemIndex) =>
-                                      itemIndex === index ? { ...item, city: value } : item
-                                    )
-                                  )
-                                }}
-                                placeholder="City"
-                                className="h-9 bg-white/10 text-white placeholder:text-white/40"
-                                disabled={saving}
-                              />
-                              <Input
-                                value={entry.state}
-                                onChange={(event) => {
-                                  const value = event.target.value
-                                  setNewCollegeEntries((prev) =>
-                                    prev.map((item, itemIndex) =>
-                                      itemIndex === index ? { ...item, state: value } : item
-                                    )
-                                  )
-                                }}
-                                placeholder="State"
-                                className="h-9 bg-white/10 text-white placeholder:text-white/40"
-                                disabled={saving}
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setNewCollegeEntries((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
-                                }
-                                className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
-                                aria-label="Remove college row"
-                                disabled={saving}
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   <Textarea
                     value={draft.others}
                     onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
