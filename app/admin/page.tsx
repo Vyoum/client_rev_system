@@ -1050,12 +1050,26 @@ function ListingsPanel({
   const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
   const isCollegeLikeForm = ["colleges", "school", "kindergarden"].includes(collectionName)
   const isCoursesForm = collectionName === "courses"
+  const isCollegesCollection = collectionName === "colleges"
   const [collegeOptions, setCollegeOptions] = useState<Array<{ id: string; name: string; city: string; state: string; status: ListingStatus }>>([])
   const [collegeOptionsLoading, setCollegeOptionsLoading] = useState(false)
   const [collegeSearch, setCollegeSearch] = useState("")
   const [newCollegeEntries, setNewCollegeEntries] = useState<Array<{ name: string; city: string; state: string }>>([])
   const [seedingCourses, setSeedingCourses] = useState(false)
   const [seedInfo, setSeedInfo] = useState<string | null>(null)
+  const [nirfImporting, setNirfImporting] = useState(false)
+  const [nirfImportInfo, setNirfImportInfo] = useState<string | null>(null)
+  const [nirfImportError, setNirfImportError] = useState<string | null>(null)
+
+  const normalizeListingName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ")
+
+  const chunkArray = <T,>(values: T[], size: number) => {
+    const chunks: T[][] = []
+    for (let i = 0; i < values.length; i += size) {
+      chunks.push(values.slice(i, i + size))
+    }
+    return chunks
+  }
 
   const handleSeedIndiaCourses = async () => {
     if (!isCoursesForm) return
@@ -1099,6 +1113,81 @@ function ListingsPanel({
       setFormError("Failed to seed India courses. Please try again.")
     } finally {
       setSeedingCourses(false)
+    }
+  }
+
+  const handleImportNirfColleges = async () => {
+    if (!isCollegesCollection) return
+    setNirfImporting(true)
+    setNirfImportInfo(null)
+    setNirfImportError(null)
+    try {
+      const response = await fetch("/api/nirf/colleges?year=2024")
+      if (!response.ok) {
+        throw new Error(`NIRF import failed (HTTP ${response.status})`)
+      }
+
+      const payload = (await response.json()) as {
+        items?: Array<{ name: string; website?: string }>
+        errors?: Array<{ category: string; error: string }>
+      }
+      const incoming = Array.isArray(payload.items) ? payload.items : []
+      if (incoming.length === 0) {
+        const errorSummary = payload.errors?.length
+          ? `No entries returned. ${payload.errors.length} category fetch errors.`
+          : "No NIRF colleges found to import."
+        setNirfImportInfo(errorSummary)
+        return
+      }
+
+      const existingNames = new Set(items.map((item) => normalizeListingName(item.name)))
+      const uniqueMap = new Map<string, { name: string; website?: string }>()
+      incoming.forEach((entry) => {
+        const name = entry.name?.trim() || ""
+        if (!name) return
+        const key = normalizeListingName(name)
+        if (existingNames.has(key)) return
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, { name, website: entry.website?.trim() || "" })
+        }
+      })
+
+      const toCreate = Array.from(uniqueMap.values())
+      if (toCreate.length === 0) {
+        setNirfImportInfo("All NIRF colleges already exist in the collection.")
+        return
+      }
+
+      setNirfImportInfo(`Preparing to import ${toCreate.length} colleges...`)
+      const chunks = chunkArray(toCreate, 400)
+      let createdCount = 0
+      for (const chunk of chunks) {
+        const batch = writeBatch(db)
+        chunk.forEach((entry) => {
+          const docRef = doc(collection(db, "colleges"))
+          const data: Record<string, unknown> = {
+            name: entry.name,
+            status: "Published",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }
+          if (entry.website) {
+            data.website = entry.website
+          }
+          batch.set(docRef, data)
+        })
+        await batch.commit()
+        createdCount += chunk.length
+        setNirfImportInfo(`Imported ${createdCount} colleges...`)
+      }
+
+      setNirfImportInfo(`Imported ${createdCount} colleges from NIRF 2024.`)
+    } catch (error) {
+      console.error("NIRF import failed:", error)
+      const message = error instanceof Error ? error.message : String(error)
+      setNirfImportError(`Failed to import NIRF colleges: ${message}`)
+    } finally {
+      setNirfImporting(false)
     }
   }
 
@@ -1636,9 +1725,23 @@ function ListingsPanel({
                 {seedingCourses ? "Seeding..." : "Seed India courses"}
               </Button>
             )}
+            {isCollegesCollection && (
+              <Button
+                size="sm"
+                className="h-10 bg-orange-500 text-white hover:bg-orange-600"
+                onClick={handleImportNirfColleges}
+                disabled={nirfImporting || saving}
+              >
+                {nirfImporting ? "Importing..." : "Import NIRF colleges"}
+              </Button>
+            )}
           </div>
         </div>
         {seedInfo && <p className="mt-3 text-xs text-white/60">{seedInfo}</p>}
+        {nirfImportInfo && <p className="mt-3 text-xs text-white/60">{nirfImportInfo}</p>}
+        {nirfImportError && (
+          <p className="mt-3 text-xs text-red-300">{nirfImportError}</p>
+        )}
 
         <div className="mt-4 space-y-3">
           {loading ? (
