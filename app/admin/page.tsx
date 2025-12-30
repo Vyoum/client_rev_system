@@ -1052,6 +1052,7 @@ function ListingsPanel({
   const isCoursesForm = collectionName === "courses"
   const isFeedForm = collectionName === "feed"
   const isCollegesCollection = collectionName === "colleges"
+  const isSchoolCollection = collectionName === "school"
   const [collegeOptions, setCollegeOptions] = useState<Array<{ id: string; name: string; city: string; state: string; status: ListingStatus }>>([])
   const [collegeOptionsLoading, setCollegeOptionsLoading] = useState(false)
   const [collegeSearch, setCollegeSearch] = useState("")
@@ -1061,6 +1062,9 @@ function ListingsPanel({
   const [nirfImporting, setNirfImporting] = useState(false)
   const [nirfImportInfo, setNirfImportInfo] = useState<string | null>(null)
   const [nirfImportError, setNirfImportError] = useState<string | null>(null)
+  const [careersImporting, setCareersImporting] = useState(false)
+  const [careersImportInfo, setCareersImportInfo] = useState<string | null>(null)
+  const [careersImportError, setCareersImportError] = useState<string | null>(null)
 
   const normalizeListingName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ")
 
@@ -1189,6 +1193,81 @@ function ListingsPanel({
       setNirfImportError(`Failed to import NIRF colleges: ${message}`)
     } finally {
       setNirfImporting(false)
+    }
+  }
+
+  const handleImportCareersSchools = async () => {
+    if (!isSchoolCollection) return
+    setCareersImporting(true)
+    setCareersImportInfo(null)
+    setCareersImportError(null)
+    try {
+      const response = await fetch("/api/careers360/schools")
+      if (!response.ok) {
+        throw new Error(`Careers360 import failed (HTTP ${response.status})`)
+      }
+
+      const payload = (await response.json()) as {
+        items?: Array<{ name: string; website?: string }>
+        errors?: Array<{ source: string; error: string }>
+      }
+      const incoming = Array.isArray(payload.items) ? payload.items : []
+      if (incoming.length === 0) {
+        const errorSummary = payload.errors?.length
+          ? `No entries returned. ${payload.errors.length} source errors.`
+          : "No Careers360 schools found to import."
+        setCareersImportInfo(errorSummary)
+        return
+      }
+
+      const existingNames = new Set(items.map((item) => normalizeListingName(item.name)))
+      const uniqueMap = new Map<string, { name: string; website?: string }>()
+      incoming.forEach((entry) => {
+        const name = entry.name?.trim() || ""
+        if (!name) return
+        const key = normalizeListingName(name)
+        if (existingNames.has(key)) return
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, { name, website: entry.website?.trim() || "" })
+        }
+      })
+
+      const toCreate = Array.from(uniqueMap.values())
+      if (toCreate.length === 0) {
+        setCareersImportInfo("All Careers360 schools already exist in the collection.")
+        return
+      }
+
+      setCareersImportInfo(`Preparing to import ${toCreate.length} schools...`)
+      const chunks = chunkArray(toCreate, 400)
+      let createdCount = 0
+      for (const chunk of chunks) {
+        const batch = writeBatch(db)
+        chunk.forEach((entry) => {
+          const docRef = doc(collection(db, "school"))
+          const data: Record<string, unknown> = {
+            name: entry.name,
+            status: "Published",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }
+          if (entry.website) {
+            data.website = entry.website
+          }
+          batch.set(docRef, data)
+        })
+        await batch.commit()
+        createdCount += chunk.length
+        setCareersImportInfo(`Imported ${createdCount} schools...`)
+      }
+
+      setCareersImportInfo(`Imported ${createdCount} schools from Careers360.`)
+    } catch (error) {
+      console.error("Careers360 import failed:", error)
+      const message = error instanceof Error ? error.message : String(error)
+      setCareersImportError(`Failed to import Careers360 schools: ${message}`)
+    } finally {
+      setCareersImporting(false)
     }
   }
 
@@ -1756,12 +1835,26 @@ function ListingsPanel({
                 {nirfImporting ? "Importing..." : "Import NIRF colleges"}
               </Button>
             )}
+            {isSchoolCollection && (
+              <Button
+                size="sm"
+                className="h-10 bg-orange-500 text-white hover:bg-orange-600"
+                onClick={handleImportCareersSchools}
+                disabled={careersImporting || saving}
+              >
+                {careersImporting ? "Importing..." : "Import Careers360 schools"}
+              </Button>
+            )}
           </div>
         </div>
         {seedInfo && <p className="mt-3 text-xs text-white/60">{seedInfo}</p>}
         {nirfImportInfo && <p className="mt-3 text-xs text-white/60">{nirfImportInfo}</p>}
         {nirfImportError && (
           <p className="mt-3 text-xs text-red-300">{nirfImportError}</p>
+        )}
+        {careersImportInfo && <p className="mt-3 text-xs text-white/60">{careersImportInfo}</p>}
+        {careersImportError && (
+          <p className="mt-3 text-xs text-red-300">{careersImportError}</p>
         )}
 
         <div className="mt-4 space-y-3">

@@ -856,7 +856,7 @@ export default function SearchCommunityPage() {
       )
     }
 
-    if (activeTab === "Colleges") {
+    if (activeTab === "Colleges" || activeTab === "School") {
       return filtered
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
