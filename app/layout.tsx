@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Nunito_Sans } from "next/font/google"
+import { GoogleAnalytics } from "@next/third-parties/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./global.css"
 
@@ -20,10 +21,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+
   return (
     <html lang="en">
       <body className={`${nunitoSans.className} antialiased`}>
         {children}
+        {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
         <Analytics />
       </body>
     </html>

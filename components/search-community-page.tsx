@@ -6,6 +6,7 @@ import { INDIA_LOCATIONS } from "../data/india-locations"
 import SignInModal from "./sign-in-modal"
 import Footer from "./footer"
 import { onAuthStateChanged } from "firebase/auth"
+import { sendGAEvent } from "@next/third-parties/google"
 import {
   arrayRemove,
   arrayUnion,
@@ -139,6 +140,7 @@ export default function SearchCommunityPage() {
   const menuRef = useRef<HTMLDivElement>(null)
   const coursesSeededRef = useRef(false)
   const coursesSeedingRef = useRef(false)
+  const scrollDepthSent = useRef(new Set<number>())
   const isSignedIn = Boolean(currentUser)
 
   const filteredStates = useMemo(() => {
@@ -205,6 +207,27 @@ export default function SearchCommunityPage() {
     })
 
     return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const thresholds = [25, 50, 75, 90]
+    const handleScroll = () => {
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight
+      if (docHeight <= 0) return
+      const percent = Math.round((window.scrollY / docHeight) * 100)
+      thresholds.forEach((threshold) => {
+        if (percent >= threshold && !scrollDepthSent.current.has(threshold)) {
+          scrollDepthSent.current.add(threshold)
+          if (typeof (window as Window & { gtag?: (...args: any[]) => void }).gtag === "function") {
+            sendGAEvent({ event: "scroll_depth", percent: threshold })
+          }
+        }
+      })
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    handleScroll()
+    return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
   useEffect(() => {
@@ -1528,6 +1551,9 @@ export default function SearchCommunityPage() {
                 <button
                   key={tab}
                   onClick={() => {
+                    if (typeof (window as Window & { gtag?: (...args: any[]) => void }).gtag === "function") {
+                      sendGAEvent({ event: "tab_click", tab_name: tab, locked: isLocked })
+                    }
                     if (isLocked) {
                       setIsSignInOpen(true)
                       return
