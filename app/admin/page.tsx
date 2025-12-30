@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { INDIA_COURSES } from "@/data/india-courses"
 import { db, auth } from "@/lib/firebase"
-import { X, ExternalLink, Upload } from "lucide-react"
+import { X, ExternalLink, Upload, Plus } from "lucide-react"
 
 type ListingStatus = "Draft" | "Published"
 type ReviewStatus = "Visible" | "Hidden"
@@ -1794,7 +1794,7 @@ function ListingsPanel({
           <Input
             value={draft.name}
             onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder={`${label} name`}
+            placeholder={isCoursesForm ? "Course name" : `${label} name`}
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
           {isCollegeLikeForm && (
@@ -1807,646 +1807,796 @@ function ListingsPanel({
           )}
         </div>
 
-        {/* Form Sections Tabs */}
-        <div className="mt-6 border-b border-white/10">
-          <div className="flex gap-4">
-            {(["whatsnew", "reviews", "about", "photos", "others"] as const).map((section) => (
-              <button
-                key={section}
-                type="button"
-                onClick={() => setActiveFormSection(section)}
-                className={`pb-3 px-1 text-sm font-semibold transition-colors ${
-                  activeFormSection === section
-                    ? "text-orange-500 border-b-2 border-orange-500"
-                    : "text-white/60 hover:text-white/80"
-                }`}
-              >
-                {section === "whatsnew"
-                  ? "What's New"
-                  : section === "others"
-                    ? "Courses"
-                    : section.charAt(0).toUpperCase() + section.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Form Sections Content */}
-        <div className="mt-4 space-y-4">
-          {/* What's New Section */}
-          {activeFormSection === "whatsnew" && (
-            <div>
-              <label className="block text-xs text-white/60 mb-2">What's New</label>
-              <Textarea
-                value={draft.whatsNew}
-                onChange={(event) => setDraft((prev) => ({ ...prev, whatsNew: event.target.value }))}
-                placeholder="Enter latest news and updates..."
-                className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
-              />
-            </div>
-          )}
-
-          {/* Reviews Section */}
-          {activeFormSection === "reviews" && (
-            <div className="space-y-3">
-              <p className="text-sm text-white/60">Reviews are managed separately in the Reviews tab.</p>
-              <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                <p className="text-xs text-white/50">To manage reviews, go to the "Reviews" tab in the main navigation.</p>
+        {!isCoursesForm && (
+          <>
+            {/* Form Sections Tabs */}
+            <div className="mt-6 border-b border-white/10">
+              <div className="flex gap-4">
+                {(["whatsnew", "reviews", "about", "photos", "others"] as const).map((section) => (
+                  <button
+                    key={section}
+                    type="button"
+                    onClick={() => setActiveFormSection(section)}
+                    className={`pb-3 px-1 text-sm font-semibold transition-colors ${
+                      activeFormSection === section
+                        ? "text-orange-500 border-b-2 border-orange-500"
+                        : "text-white/60 hover:text-white/80"
+                    }`}
+                  >
+                    {section === "whatsnew"
+                      ? "What's New"
+                      : section === "others"
+                        ? "Courses"
+                        : section.charAt(0).toUpperCase() + section.slice(1)}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
 
-          {/* About Section */}
-          {activeFormSection === "about" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-white/60 mb-2">Website</label>
-                <Input
-                  value={draft.website}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, website: event.target.value }))}
-                  placeholder="https://example.com"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              {!isCollegeLikeForm && (
+            {/* Form Sections Content */}
+            <div className="mt-4 space-y-4">
+              {/* What's New Section */}
+              {activeFormSection === "whatsnew" && (
                 <div>
-                  <label className="block text-xs text-white/60 mb-2">Logo URL</label>
-                  <Input
-                    value={draft.logoUrl}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
-                    placeholder="https://example.com/logo.png"
-                    className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                  <label className="block text-xs text-white/60 mb-2">What's New</label>
+                  <Textarea
+                    value={draft.whatsNew}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, whatsNew: event.target.value }))}
+                    placeholder="Enter latest news and updates..."
+                    className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
                   />
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs text-white/60 mb-2">Founded In</label>
-                <Input
-                  type="text"
-                  value={draft.founded}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
-                  placeholder="Enter founding year (e.g., 1995)"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-white/60 mb-2">Total Number of Faculty</label>
-                <Input
-                  type="number"
-                  value={draft.facultyCount}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, facultyCount: event.target.value }))}
-                  placeholder="Enter total number of faculty"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  value={draft.city}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, city: event.target.value }))}
-                  placeholder="City"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-                <Input
-                  value={draft.state}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, state: event.target.value }))}
-                  placeholder="State"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-white/60 mb-2">Location URL (Google Maps / Apple Maps)</label>
-                <Input
-                  value={draft.locationLink}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, locationLink: event.target.value }))}
-                  placeholder="https://maps.google.com/... or https://maps.apple.com/..."
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-                {draft.locationLink && (
-                  <div className="mt-2">
-                    <a
-                      href={draft.locationLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-xs font-semibold text-orange-500 hover:text-orange-400"
-                    >
-                      Preview Location Link
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs text-white/60 mb-2">Mission</label>
-                <Textarea
-                  value={draft.mission}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, mission: event.target.value }))}
-                  placeholder="Enter mission statement..."
-                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-white/60 mb-2">Vision</label>
-                <Textarea
-                  value={draft.vision}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, vision: event.target.value }))}
-                  placeholder="Enter vision statement..."
-                  className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  value={draft.type}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
-                  placeholder="Type (e.g., Public)"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-                <Input
-                  value={draft.revenue}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
-                  placeholder="Revenue"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  type="number"
-                  min="0"
-                  value={draft.locationsCount}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
-                  placeholder="Locations count"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-                <Input
-                  value={draft.industry}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
-                  placeholder="Industry"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-white/60 mb-2">About</label>
-                <Textarea
-                  value={draft.description}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-                  placeholder="Enter description and details..."
-                  className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
-                />
-              </div>
-
-              {/* CEO Information */}
-              <div className="space-y-3 pt-4 border-t border-white/10">
-                <label className="block text-xs text-white/60 mb-2">CEO Information</label>
-                <Input
-                  value={draft.ceoName}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, ceoName: event.target.value }))}
-                  placeholder="CEO Name"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-                <Input
-                  value={draft.ceoPhotoUrl}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, ceoPhotoUrl: event.target.value }))}
-                  placeholder="CEO Photo URL"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                />
-                {draft.ceoPhotoUrl && (
-                  <div className="mt-2">
-                    <img
-                      src={draft.ceoPhotoUrl}
-                      alt="CEO Preview"
-                      className="h-16 w-16 rounded-full object-cover border border-white/20"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none'
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Photos Section */}
-          {activeFormSection === "photos" && (
-            <div>
-              <label className="block text-xs text-white/60 mb-2">Photos</label>
-              <p className="text-xs text-white/40 mb-3">
-                Upload photos directly or enter image URLs. Maximum 10 photos total.
-              </p>
-              
-              {/* File Upload */}
-              <div className="mb-4">
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Upload className="h-8 w-8 text-white/60 mb-2" />
-                    <p className="text-sm text-white/80 font-medium">
-                      {uploadingPhotos ? "Uploading..." : "Click to upload photos"}
-                    </p>
-                    <p className="text-xs text-white/50 mt-1">PNG, JPG, GIF up to 10MB each</p>
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    multiple
-                    onChange={handlePhotoUpload}
-                    disabled={uploadingPhotos || saving}
-                  />
-                </label>
-              </div>
-
-              {/* Photo Files Preview */}
-              {photoFiles.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs text-white/60 mb-2">
-                    {photoFiles.length} file(s) ready to upload
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {photoFiles.map((file, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={`Preview ${index + 1}`}
-                          className="w-full h-24 object-cover rounded-lg border border-white/10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePhotoFile(index)}
-                          className="absolute top-1 right-1 p-1 rounded-full bg-red-500/80 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                          disabled={uploadingPhotos || saving}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                        <div className="absolute bottom-1 left-1 right-1">
-                          <p className="text-[10px] text-white/80 bg-black/60 rounded px-1 truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-[10px] text-white/60 bg-black/60 rounded px-1 mt-0.5">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* URL Input (Alternative/Additional) */}
-              <details className="mb-4">
-                <summary className="text-xs text-white/60 cursor-pointer hover:text-white/80 mb-2">
-                  Or enter photo URLs manually (one per line)
-                </summary>
-                <Textarea
-                  value={draft.photos}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, photos: event.target.value }))}
-                  placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg&#10;https://example.com/photo3.jpg"
-                  className="mt-2 min-h-[100px] bg-white/10 text-white placeholder:text-white/40"
-                  rows={4}
-                  disabled={uploadingPhotos || saving}
-                />
-              </details>
-              
-              {/* Combined Photo Preview */}
-              {(() => {
-                const photoUrls = draft.photos
-                  .split("\n")
-                  .map((url) => url.trim())
-                  .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))
-                
-                const totalPhotos = photoUrls.length + photoFiles.length
-                
-                if (totalPhotos > 0) {
-                  return (
-                    <div className="mt-4">
-                      <p className="text-xs text-white/60 mb-2">
-                        Total: {totalPhotos} photo(s) {photoFiles.length > 0 && `(${photoFiles.length} will be uploaded)`}
-                      </p>
-                      {photoUrls.length > 0 && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {photoUrls.map((url, index) => (
-                            <div key={`url-${index}`} className="relative group">
-                              <img
-                                src={url}
-                                alt={`Photo ${index + 1}`}
-                                className="w-full h-24 object-cover rounded-lg border border-white/10"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ccc' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3EInvalid URL%3C/text%3E%3C/svg%3E"
-                                }}
-                              />
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors"
-                              >
-                                <ExternalLink className="h-4 w-4 text-white opacity-0 group-hover:opacity-100" />
-                              </a>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                }
-                return null
-              })()}
-              
-              {/* Cloudinary Setup Info */}
-              {(!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || !process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) && (
-                <div className="mt-4 p-3 rounded-lg border border-orange-500/30 bg-orange-500/10">
-                  <p className="text-xs text-orange-300 mb-2 font-semibold">⚠️ Cloudinary Not Configured</p>
-                  <p className="text-xs text-orange-200/80 mb-2">
-                    To enable direct photo uploads, please set up Cloudinary:
-                  </p>
-                  <ol className="text-xs text-orange-200/70 space-y-1 list-decimal list-inside ml-2">
-                    <li>Create a free account at <a href="https://cloudinary.com" target="_blank" rel="noopener noreferrer" className="text-orange-300 hover:text-orange-200 underline">cloudinary.com</a></li>
-                    <li>Create an unsigned upload preset</li>
-                    <li>Add environment variables (see CLOUDINARY_SETUP.md)</li>
-                  </ol>
-                  <p className="text-xs text-orange-200/70 mt-2">
-                    Until then, you can still use the URL input method above.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Courses Section */}
-          {activeFormSection === "others" && (
-            <div className="space-y-3 w-full">
-              <label className="block text-xs text-white/60 mb-2">Courses</label>
-              {isCoursesForm && (
+              {/* Reviews Section */}
+              {activeFormSection === "reviews" && (
                 <div className="space-y-3">
-                  <Input
-                    value={draft.courseName}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, courseName: event.target.value }))}
-                    placeholder="Course name"
-                    className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                  />
-                  <Input
-                    value={draft.courseField}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, courseField: event.target.value }))}
-                    placeholder="Course field"
-                    className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                  />
-                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
-                    <Input
-                      type="number"
-                      min="0"
-                      value={draft.courseFacultyMembers}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, courseFacultyMembers: event.target.value }))}
-                      placeholder="Faculty members"
-                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                    />
-                    <Input
-                      type="number"
-                      min="0"
-                      value={draft.courseStudentsEnrolled}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, courseStudentsEnrolled: event.target.value }))}
-                      placeholder="Students currently enrolled"
-                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                    />
+                  <p className="text-sm text-white/60">Reviews are managed separately in the Reviews tab.</p>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs text-white/50">To manage reviews, go to the "Reviews" tab in the main navigation.</p>
                   </div>
                 </div>
               )}
 
-              {isCoursesForm && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold text-white/70">Colleges offering this course</p>
-                    <p className="text-xs text-white/50">{draft.collegeIds.length} selected</p>
+              {/* About Section */}
+              {activeFormSection === "about" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs text-white/60 mb-2">Website</label>
+                    <Input
+                      value={draft.website}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, website: event.target.value }))}
+                      placeholder="https://example.com"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
                   </div>
-                  <Input
-                    value={collegeSearch}
-                    onChange={(event) => setCollegeSearch(event.target.value)}
-                    placeholder="Search colleges"
-                    className="h-9 bg-white/10 text-white placeholder:text-white/40 w-full"
-                    disabled={saving}
-                  />
-                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                    {collegeOptionsLoading ? (
-                      <p className="text-sm text-white/60">Loading colleges...</p>
-                    ) : filteredCollegeOptions.length === 0 ? (
-                      <p className="text-sm text-white/60">No colleges found.</p>
-                    ) : (
-                      filteredCollegeOptions.map((college) => {
-                        const checked = draft.collegeIds.includes(college.id)
-                        const subheading = [college.city, college.state].filter(Boolean).join(", ")
-                        return (
-                          <label
-                            key={college.id}
-                            className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 cursor-pointer hover:bg-white/10"
-                          >
-                            <input
-                              type="checkbox"
-                              className="mt-1 accent-orange-500"
-                              checked={checked}
-                              onChange={(event) => {
-                                const isChecked = event.target.checked
-                                setDraft((prev) => {
-                                  const nextIds = isChecked
-                                    ? Array.from(new Set([...prev.collegeIds, college.id]))
-                                    : prev.collegeIds.filter((id) => id !== college.id)
-                                  return { ...prev, collegeIds: nextIds }
-                                })
-                              }}
-                              disabled={saving}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
-                              {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
-                            </div>
-                            <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
-                              {college.status}
-                            </span>
-                          </label>
-                        )
-                      })
+
+                  {!isCollegeLikeForm && (
+                    <div>
+                      <label className="block text-xs text-white/60 mb-2">Logo URL</label>
+                      <Input
+                        value={draft.logoUrl}
+                        onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
+                        placeholder="https://example.com/logo.png"
+                        className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs text-white/60 mb-2">Founded In</label>
+                    <Input
+                      type="text"
+                      value={draft.founded}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
+                      placeholder="Enter founding year (e.g., 1995)"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-white/60 mb-2">Total Number of Faculty</label>
+                    <Input
+                      type="number"
+                      value={draft.facultyCount}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, facultyCount: event.target.value }))}
+                      placeholder="Enter total number of faculty"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      value={draft.city}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, city: event.target.value }))}
+                      placeholder="City"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                    <Input
+                      value={draft.state}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, state: event.target.value }))}
+                      placeholder="State"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-white/60 mb-2">Location URL (Google Maps / Apple Maps)</label>
+                    <Input
+                      value={draft.locationLink}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, locationLink: event.target.value }))}
+                      placeholder="https://maps.google.com/... or https://maps.apple.com/..."
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                    {draft.locationLink && (
+                      <div className="mt-2">
+                        <a
+                          href={draft.locationLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-xs font-semibold text-orange-500 hover:text-orange-400"
+                        >
+                          Preview Location Link
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-white/60 mb-2">Mission</label>
+                    <Textarea
+                      value={draft.mission}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, mission: event.target.value }))}
+                      placeholder="Enter mission statement..."
+                      className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-white/60 mb-2">Vision</label>
+                    <Textarea
+                      value={draft.vision}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, vision: event.target.value }))}
+                      placeholder="Enter vision statement..."
+                      className="min-h-[120px] bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      value={draft.type}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
+                      placeholder="Type (e.g., Public)"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                    <Input
+                      value={draft.revenue}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
+                      placeholder="Revenue"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.locationsCount}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
+                      placeholder="Locations count"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                    <Input
+                      value={draft.industry}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
+                      placeholder="Industry"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-white/60 mb-2">About</label>
+                    <Textarea
+                      value={draft.description}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+                      placeholder="Enter description and details..."
+                      className="min-h-[150px] bg-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+
+                  {/* CEO Information */}
+                  <div className="space-y-3 pt-4 border-t border-white/10">
+                    <label className="block text-xs text-white/60 mb-2">CEO Information</label>
+                    <Input
+                      value={draft.ceoName}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, ceoName: event.target.value }))}
+                      placeholder="CEO Name"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                    <Input
+                      value={draft.ceoPhotoUrl}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, ceoPhotoUrl: event.target.value }))}
+                      placeholder="CEO Photo URL"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
+                    />
+                    {draft.ceoPhotoUrl && (
+                      <div className="mt-2">
+                        <img
+                          src={draft.ceoPhotoUrl}
+                          alt="CEO Preview"
+                          className="h-16 w-16 rounded-full object-cover border border-white/20"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none'
+                          }}
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {isCoursesForm && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold text-white/70">Add new colleges</p>
-                      <p className="text-[11px] text-white/50">Create as many rows as needed.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setNewCollegeEntries((prev) => [...prev, { name: "", city: "", state: "" }])
-                      }
-                      className="h-8 rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
-                      disabled={saving}
-                    >
-                      Add college
-                    </button>
+              {/* Photos Section */}
+              {activeFormSection === "photos" && (
+                <div>
+                  <label className="block text-xs text-white/60 mb-2">Photos</label>
+                  <p className="text-xs text-white/40 mb-3">
+                    Upload photos directly or enter image URLs. Maximum 10 photos total.
+                  </p>
+                  
+                  {/* File Upload */}
+                  <div className="mb-4">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Upload className="h-8 w-8 text-white/60 mb-2" />
+                        <p className="text-sm text-white/80 font-medium">
+                          {uploadingPhotos ? "Uploading..." : "Click to upload photos"}
+                        </p>
+                        <p className="text-xs text-white/50 mt-1">PNG, JPG, GIF up to 10MB each</p>
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        multiple
+                        onChange={handlePhotoUpload}
+                        disabled={uploadingPhotos || saving}
+                      />
+                    </label>
                   </div>
-                  {newCollegeEntries.length === 0 ? (
-                    <p className="text-xs text-white/50">No new colleges added yet.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {newCollegeEntries.map((entry, index) => (
-                        <div
-                          key={`new-college-${index}`}
-                          className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto] items-start"
-                        >
-                          <Input
-                            value={entry.name}
-                            onChange={(event) => {
-                              const value = event.target.value
-                              setNewCollegeEntries((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, name: value } : item
-                                )
-                              )
-                            }}
-                            placeholder="College name"
-                            className="h-9 bg-white/10 text-white placeholder:text-white/40"
-                            disabled={saving}
-                          />
-                          <Input
-                            value={entry.city}
-                            onChange={(event) => {
-                              const value = event.target.value
-                              setNewCollegeEntries((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, city: value } : item
-                                )
-                              )
-                            }}
-                            placeholder="City"
-                            className="h-9 bg-white/10 text-white placeholder:text-white/40"
-                            disabled={saving}
-                          />
-                          <Input
-                            value={entry.state}
-                            onChange={(event) => {
-                              const value = event.target.value
-                              setNewCollegeEntries((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, state: value } : item
-                                )
-                              )
-                            }}
-                            placeholder="State"
-                            className="h-9 bg-white/10 text-white placeholder:text-white/40"
-                            disabled={saving}
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setNewCollegeEntries((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
-                            }
-                            className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
-                            aria-label="Remove college row"
-                            disabled={saving}
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
+
+                  {/* Photo Files Preview */}
+                  {photoFiles.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs text-white/60 mb-2">
+                        {photoFiles.length} file(s) ready to upload
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {photoFiles.map((file, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={URL.createObjectURL(file)}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-24 object-cover rounded-lg border border-white/10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removePhotoFile(index)}
+                              className="absolute top-1 right-1 p-1 rounded-full bg-red-500/80 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                              disabled={uploadingPhotos || saving}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                            <div className="absolute bottom-1 left-1 right-1">
+                              <p className="text-[10px] text-white/80 bg-black/60 rounded px-1 truncate">
+                                {file.name}
+                              </p>
+                              <p className="text-[10px] text-white/60 bg-black/60 rounded px-1 mt-0.5">
+                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* URL Input (Alternative/Additional) */}
+                  <details className="mb-4">
+                    <summary className="text-xs text-white/60 cursor-pointer hover:text-white/80 mb-2">
+                      Or enter photo URLs manually (one per line)
+                    </summary>
+                    <Textarea
+                      value={draft.photos}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, photos: event.target.value }))}
+                      placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg&#10;https://example.com/photo3.jpg"
+                      className="mt-2 min-h-[100px] bg-white/10 text-white placeholder:text-white/40"
+                      rows={4}
+                      disabled={uploadingPhotos || saving}
+                    />
+                  </details>
+                  
+                  {/* Combined Photo Preview */}
+                  {(() => {
+                    const photoUrls = draft.photos
+                      .split("\n")
+                      .map((url) => url.trim())
+                      .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))
+                    
+                    const totalPhotos = photoUrls.length + photoFiles.length
+                    
+                    if (totalPhotos > 0) {
+                      return (
+                        <div className="mt-4">
+                          <p className="text-xs text-white/60 mb-2">
+                            Total: {totalPhotos} photo(s) {photoFiles.length > 0 && `(${photoFiles.length} will be uploaded)`}
+                          </p>
+                          {photoUrls.length > 0 && (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {photoUrls.map((url, index) => (
+                                <div key={`url-${index}`} className="relative group">
+                                  <img
+                                    src={url}
+                                    alt={`Photo ${index + 1}`}
+                                    className="w-full h-24 object-cover rounded-lg border border-white/10"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ccc' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3EInvalid URL%3C/text%3E%3C/svg%3E"
+                                    }}
+                                  />
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors"
+                                  >
+                                    <ExternalLink className="h-4 w-4 text-white opacity-0 group-hover:opacity-100" />
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ))}
+                      )
+                    }
+                    return null
+                  })()}
+                  
+                  {/* Cloudinary Setup Info */}
+                  {(!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || !process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) && (
+                    <div className="mt-4 p-3 rounded-lg border border-orange-500/30 bg-orange-500/10">
+                      <p className="text-xs text-orange-300 mb-2 font-semibold">⚠️ Cloudinary Not Configured</p>
+                      <p className="text-xs text-orange-200/80 mb-2">
+                        To enable direct photo uploads, please set up Cloudinary:
+                      </p>
+                      <ol className="text-xs text-orange-200/70 space-y-1 list-decimal list-inside ml-2">
+                        <li>Create a free account at <a href="https://cloudinary.com" target="_blank" rel="noopener noreferrer" className="text-orange-300 hover:text-orange-200 underline">cloudinary.com</a></li>
+                        <li>Create an unsigned upload preset</li>
+                        <li>Add environment variables (see CLOUDINARY_SETUP.md)</li>
+                      </ol>
+                      <p className="text-xs text-orange-200/70 mt-2">
+                        Until then, you can still use the URL input method above.
+                      </p>
                     </div>
                   )}
                 </div>
               )}
 
-              <Textarea
-                value={draft.others}
-                onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
-                placeholder="Enter additional information..."
-                className="min-h-[100px] bg-white/10 text-white placeholder:text-white/40 w-full"
+              {/* Courses Section */}
+              {activeFormSection === "others" && (
+                <div className="space-y-3 w-full">
+                  <label className="block text-xs text-white/60 mb-2">Courses</label>
+                  {isCoursesForm && (
+                    <div className="space-y-3">
+                      <Input
+                        value={draft.courseName}
+                        onChange={(event) => setDraft((prev) => ({ ...prev, courseName: event.target.value }))}
+                        placeholder="Course name"
+                        className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                      />
+                      <Input
+                        value={draft.courseField}
+                        onChange={(event) => setDraft((prev) => ({ ...prev, courseField: event.target.value }))}
+                        placeholder="Course field"
+                        className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                      />
+                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                        <Input
+                          type="number"
+                          min="0"
+                          value={draft.courseFacultyMembers}
+                          onChange={(event) => setDraft((prev) => ({ ...prev, courseFacultyMembers: event.target.value }))}
+                          placeholder="Faculty members"
+                          className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          value={draft.courseStudentsEnrolled}
+                          onChange={(event) => setDraft((prev) => ({ ...prev, courseStudentsEnrolled: event.target.value }))}
+                          placeholder="Students currently enrolled"
+                          className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {isCoursesForm && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold text-white/70">Colleges offering this course</p>
+                        <p className="text-xs text-white/50">{draft.collegeIds.length} selected</p>
+                      </div>
+                      <Input
+                        value={collegeSearch}
+                        onChange={(event) => setCollegeSearch(event.target.value)}
+                        placeholder="Search colleges"
+                        className="h-9 bg-white/10 text-white placeholder:text-white/40 w-full"
+                        disabled={saving}
+                      />
+                      <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                        {collegeOptionsLoading ? (
+                          <p className="text-sm text-white/60">Loading colleges...</p>
+                        ) : filteredCollegeOptions.length === 0 ? (
+                          <p className="text-sm text-white/60">No colleges found.</p>
+                        ) : (
+                          filteredCollegeOptions.map((college) => {
+                            const checked = draft.collegeIds.includes(college.id)
+                            const subheading = [college.city, college.state].filter(Boolean).join(", ")
+                            return (
+                              <label
+                                key={college.id}
+                                className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 cursor-pointer hover:bg-white/10"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 accent-orange-500"
+                                  checked={checked}
+                                  onChange={(event) => {
+                                    const isChecked = event.target.checked
+                                    setDraft((prev) => {
+                                      const nextIds = isChecked
+                                        ? Array.from(new Set([...prev.collegeIds, college.id]))
+                                        : prev.collegeIds.filter((id) => id !== college.id)
+                                      return { ...prev, collegeIds: nextIds }
+                                    })
+                                  }}
+                                  disabled={saving}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
+                                  {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
+                                </div>
+                                <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
+                                  {college.status}
+                                </span>
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {isCoursesForm && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-white/70">Add new colleges</p>
+                          <p className="text-[11px] text-white/50">Create as many rows as needed.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewCollegeEntries((prev) => [...prev, { name: "", city: "", state: "" }])
+                          }
+                          className="h-8 rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
+                          disabled={saving}
+                        >
+                          Add college
+                        </button>
+                      </div>
+                      {newCollegeEntries.length === 0 ? (
+                        <p className="text-xs text-white/50">No new colleges added yet.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {newCollegeEntries.map((entry, index) => (
+                            <div
+                              key={`new-college-${index}`}
+                              className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto] items-start"
+                            >
+                              <Input
+                                value={entry.name}
+                                onChange={(event) => {
+                                  const value = event.target.value
+                                  setNewCollegeEntries((prev) =>
+                                    prev.map((item, itemIndex) =>
+                                      itemIndex === index ? { ...item, name: value } : item
+                                    )
+                                  )
+                                }}
+                                placeholder="College name"
+                                className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                                disabled={saving}
+                              />
+                              <Input
+                                value={entry.city}
+                                onChange={(event) => {
+                                  const value = event.target.value
+                                  setNewCollegeEntries((prev) =>
+                                    prev.map((item, itemIndex) =>
+                                      itemIndex === index ? { ...item, city: value } : item
+                                    )
+                                  )
+                                }}
+                                placeholder="City"
+                                className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                                disabled={saving}
+                              />
+                              <Input
+                                value={entry.state}
+                                onChange={(event) => {
+                                  const value = event.target.value
+                                  setNewCollegeEntries((prev) =>
+                                    prev.map((item, itemIndex) =>
+                                      itemIndex === index ? { ...item, state: value } : item
+                                    )
+                                  )
+                                }}
+                                placeholder="State"
+                                className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                                disabled={saving}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setNewCollegeEntries((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+                                }
+                                className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
+                                aria-label="Remove college row"
+                                disabled={saving}
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <Textarea
+                    value={draft.others}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
+                    placeholder="Enter additional information..."
+                    className="min-h-[100px] bg-white/10 text-white placeholder:text-white/40 w-full"
+                  />
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="5"
+                      step="0.1"
+                      value={draft.rating}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, rating: event.target.value }))}
+                      placeholder="Rating (0-5)"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.jobsCount}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, jobsCount: event.target.value }))}
+                      placeholder="Jobs count"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                  </div>
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.reviewsCount}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, reviewsCount: event.target.value }))}
+                      placeholder="Reviews count"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.salariesCount}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, salariesCount: event.target.value }))}
+                      placeholder="Salaries count"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                  </div>
+                  <div className="grid gap-3 grid-cols-1 w-full">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.locationsCount}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
+                      placeholder="Locations count"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                  </div>
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                    <Input
+                      value={draft.type}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
+                      placeholder="Type (e.g., Public)"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                    <Input
+                      value={draft.revenue}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
+                      placeholder="Revenue"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                  </div>
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
+                    <Input
+                      value={draft.founded}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
+                      placeholder="Founded year"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                    <Input
+                      value={draft.industry}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
+                      placeholder="Industry"
+                      className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {isCoursesForm && (
+          <div className="mt-6 space-y-4">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-white/70">Colleges offering this course</p>
+                <p className="text-xs text-white/50">{draft.collegeIds.length} selected</p>
+              </div>
+              <Input
+                value={collegeSearch}
+                onChange={(event) => setCollegeSearch(event.target.value)}
+                placeholder="Search colleges"
+                className="h-9 bg-white/10 text-white placeholder:text-white/40 w-full"
+                disabled={saving}
               />
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
-                <Input
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="0.1"
-                  value={draft.rating}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, rating: event.target.value }))}
-                  placeholder="Rating (0-5)"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-                <Input
-                  type="number"
-                  min="0"
-                  value={draft.jobsCount}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, jobsCount: event.target.value }))}
-                  placeholder="Jobs count"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-              </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
-                <Input
-                  type="number"
-                  min="0"
-                  value={draft.reviewsCount}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, reviewsCount: event.target.value }))}
-                  placeholder="Reviews count"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-                <Input
-                  type="number"
-                  min="0"
-                  value={draft.salariesCount}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, salariesCount: event.target.value }))}
-                  placeholder="Salaries count"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-              </div>
-              <div className="grid gap-3 grid-cols-1 w-full">
-                <Input
-                  type="number"
-                  min="0"
-                  value={draft.locationsCount}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, locationsCount: event.target.value }))}
-                  placeholder="Locations count"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-              </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
-                <Input
-                  value={draft.type}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, type: event.target.value }))}
-                  placeholder="Type (e.g., Public)"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-                <Input
-                  value={draft.revenue}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, revenue: event.target.value }))}
-                  placeholder="Revenue"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-              </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 w-full">
-                <Input
-                  value={draft.founded}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, founded: event.target.value }))}
-                  placeholder="Founded year"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
-                <Input
-                  value={draft.industry}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, industry: event.target.value }))}
-                  placeholder="Industry"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40 w-full"
-                />
+              <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                {collegeOptionsLoading ? (
+                  <p className="text-sm text-white/60">Loading colleges...</p>
+                ) : filteredCollegeOptions.length === 0 ? (
+                  <p className="text-sm text-white/60">No colleges found.</p>
+                ) : (
+                  filteredCollegeOptions.map((college) => {
+                    const checked = draft.collegeIds.includes(college.id)
+                    const subheading = [college.city, college.state].filter(Boolean).join(", ")
+                    return (
+                      <label
+                        key={college.id}
+                        className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 cursor-pointer hover:bg-white/10"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1 accent-orange-500"
+                          checked={checked}
+                          onChange={(event) => {
+                            const isChecked = event.target.checked
+                            setDraft((prev) => {
+                              const nextIds = isChecked
+                                ? Array.from(new Set([...prev.collegeIds, college.id]))
+                                : prev.collegeIds.filter((id) => id !== college.id)
+                              return { ...prev, collegeIds: nextIds }
+                            })
+                          }}
+                          disabled={saving}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
+                          {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
+                        </div>
+                        <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
+                          {college.status}
+                        </span>
+                      </label>
+                    )
+                  })
+                )}
               </div>
             </div>
-          )}
-        </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-white/70">Add new colleges</p>
+                  <p className="text-[11px] text-white/50">Create as many rows as needed.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewCollegeEntries((prev) => [...prev, { name: "", city: "", state: "" }])
+                  }
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white hover:bg-white/20"
+                  aria-label="Add college row"
+                  title="Add college"
+                  disabled={saving}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              {newCollegeEntries.length === 0 ? (
+                <p className="text-xs text-white/50">No new colleges added yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {newCollegeEntries.map((entry, index) => (
+                    <div
+                      key={`new-college-${index}`}
+                      className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto] items-start"
+                    >
+                      <Input
+                        value={entry.name}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setNewCollegeEntries((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, name: value } : item
+                            )
+                          )
+                        }}
+                        placeholder="College name"
+                        className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                        disabled={saving}
+                      />
+                      <Input
+                        value={entry.city}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setNewCollegeEntries((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, city: value } : item
+                            )
+                          )
+                        }}
+                        placeholder="City"
+                        className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                        disabled={saving}
+                      />
+                      <Input
+                        value={entry.state}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setNewCollegeEntries((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, state: value } : item
+                            )
+                          )
+                        }}
+                        placeholder="State"
+                        className="h-9 bg-white/10 text-white placeholder:text-white/40"
+                        disabled={saving}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewCollegeEntries((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+                        }
+                        className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
+                        aria-label="Remove college row"
+                        disabled={saving}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {formError && <p className="text-xs text-red-300 mt-4">{formError}</p>}
 
