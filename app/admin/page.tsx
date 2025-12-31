@@ -1064,6 +1064,8 @@ function ListingsPanel({
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [principalFile, setPrincipalFile] = useState<File | null>(null)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ [key: number]: number }>({})
   const isCollegeLikeForm = ["colleges", "school", "kindergarden"].includes(collectionName)
@@ -1384,6 +1386,8 @@ function ListingsPanel({
     setEditingId(null)
     setFormError(null)
     setPhotoFiles([])
+    setLogoFile(null)
+    setPrincipalFile(null)
     setUploadProgress({})
     setActiveFormSection("whatsnew")
     setNewCollegeEntries([])
@@ -1462,6 +1466,36 @@ function ListingsPanel({
     }
 
     setPhotoFiles((prev) => [...prev, ...imageFiles.slice(0, remainingSlots)])
+    setFormError(null)
+  }
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setFormError("Please select image files only.")
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError("Some files are too large. Maximum file size is 10MB.")
+      return
+    }
+    setLogoFile(file)
+    setFormError(null)
+  }
+
+  const handlePrincipalUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setFormError("Please select image files only.")
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError("Some files are too large. Maximum file size is 10MB.")
+      return
+    }
+    setPrincipalFile(file)
     setFormError(null)
   }
 
@@ -1639,19 +1673,29 @@ function ListingsPanel({
       }
 
       // Upload new photo files to Cloudinary
-      if (photoFiles.length > 0) {
+      if (photoFiles.length > 0 || logoFile || principalFile) {
         setUploadingPhotos(true)
         try {
-          if (isFeedForm) {
-            const file = photoFiles[0]
-            const url = await uploadToCloudinary(file, 0)
+          if (logoFile) {
+            const url = await uploadToCloudinary(logoFile, 0)
             listingData.logoUrl = url
-            setUploadProgress((prev) => ({ ...prev, 0: 100 }))
-          } else {
+          }
+
+          if (principalFile) {
+            const url = await uploadToCloudinary(principalFile, 1)
+            listingData.ceoPhotoUrl = url
+          }
+
+          if (isFeedForm) {
+            if (photoFiles.length > 0) {
+              const file = photoFiles[0]
+              const url = await uploadToCloudinary(file, 2)
+              listingData.logoUrl = url
+            }
+          } else if (photoFiles.length > 0) {
             const uploadPromises = photoFiles.map(async (file, index) => {
               try {
                 const url = await uploadToCloudinary(file, index)
-                setUploadProgress((prev) => ({ ...prev, [index]: 100 }))
                 return url
               } catch (error) {
                 console.error(`Failed to upload ${file.name}:`, error)
@@ -1816,6 +1860,8 @@ function ListingsPanel({
     setEditingId(item.id)
     setFormError(null)
     setPhotoFiles([])
+    setLogoFile(null)
+    setPrincipalFile(null)
     setUploadProgress({})
     setNewCollegeEntries([])
     // Convert photos array to newline-separated string for textarea
@@ -1965,12 +2011,64 @@ function ListingsPanel({
             className="h-10 bg-white/10 text-white placeholder:text-white/40"
           />
           {isCollegeLikeForm && (
-            <Input
-              value={draft.logoUrl}
-              onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
-              placeholder="Logo URL"
-              className="h-10 bg-white/10 text-white placeholder:text-white/40"
-            />
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-white/70">Logo</p>
+                {logoFile && (
+                  <button
+                    type="button"
+                    onClick={() => setLogoFile(null)}
+                    className="text-xs text-white/60 hover:text-white"
+                    disabled={uploadingPhotos || saving}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                <div className="flex flex-col items-center justify-center pt-4 pb-5">
+                  <Upload className="h-5 w-5 text-white/60 mb-2" />
+                  <p className="text-xs text-white/80 font-medium">
+                    {uploadingPhotos ? "Uploading..." : "Click to upload logo"}
+                  </p>
+                  <p className="text-[10px] text-white/50 mt-1">PNG, JPG up to 10MB</p>
+                </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  disabled={uploadingPhotos || saving}
+                />
+              </label>
+              {logoFile ? (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={URL.createObjectURL(logoFile)}
+                    alt="Logo preview"
+                    className="h-14 w-14 rounded-lg border border-white/10 object-cover"
+                  />
+                  <div className="text-xs text-white/60">
+                    <p className="font-semibold text-white/80">{logoFile.name}</p>
+                    <p>{(logoFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                </div>
+              ) : (
+                draft.logoUrl && (
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={draft.logoUrl}
+                      alt="Logo"
+                      className="h-14 w-14 rounded-lg border border-white/10 object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none"
+                      }}
+                    />
+                    <p className="text-xs text-white/60">Current logo</p>
+                  </div>
+                )
+              )}
+            </div>
           )}
         </div>
 
@@ -2041,20 +2139,9 @@ function ListingsPanel({
                       (e.target as HTMLImageElement).style.display = "none"
                     }}
                   />
-                  <p className="text-xs text-white/60">Current image URL</p>
+                  <p className="text-xs text-white/60">Current image</p>
                 </div>
               )}
-
-              <div>
-                <label className="block text-xs text-white/60 mb-2">Image URL (optional)</label>
-                <Input
-                  value={draft.logoUrl}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
-                  placeholder="https://example.com/image.png"
-                  className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                  disabled={uploadingPhotos || saving}
-                />
-              </div>
 
               {(!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || !process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET) && (
                 <div className="mt-2 p-3 rounded-lg border border-orange-500/30 bg-orange-500/10">
@@ -2133,14 +2220,63 @@ function ListingsPanel({
                   </div>
 
                   {!isCollegeLikeForm && (
-                    <div>
-                      <label className="block text-xs text-white/60 mb-2">Logo URL</label>
-                      <Input
-                        value={draft.logoUrl}
-                        onChange={(event) => setDraft((prev) => ({ ...prev, logoUrl: event.target.value }))}
-                        placeholder="https://example.com/logo.png"
-                        className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                      />
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-white/70">Logo</p>
+                        {logoFile && (
+                          <button
+                            type="button"
+                            onClick={() => setLogoFile(null)}
+                            className="text-xs text-white/60 hover:text-white"
+                            disabled={uploadingPhotos || saving}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-4 pb-5">
+                          <Upload className="h-5 w-5 text-white/60 mb-2" />
+                          <p className="text-xs text-white/80 font-medium">
+                            {uploadingPhotos ? "Uploading..." : "Click to upload logo"}
+                          </p>
+                          <p className="text-[10px] text-white/50 mt-1">PNG, JPG up to 10MB</p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          disabled={uploadingPhotos || saving}
+                        />
+                      </label>
+                      {logoFile ? (
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={URL.createObjectURL(logoFile)}
+                            alt="Logo preview"
+                            className="h-14 w-14 rounded-lg border border-white/10 object-cover"
+                          />
+                          <div className="text-xs text-white/60">
+                            <p className="font-semibold text-white/80">{logoFile.name}</p>
+                            <p>{(logoFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                          </div>
+                        </div>
+                      ) : (
+                        draft.logoUrl && (
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={draft.logoUrl}
+                              alt="Logo"
+                              className="h-14 w-14 rounded-lg border border-white/10 object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none"
+                              }}
+                            />
+                            <p className="text-xs text-white/60">Current logo</p>
+                          </div>
+                        )
+                      )}
                     </div>
                   )}
 
@@ -2266,33 +2402,72 @@ function ListingsPanel({
                     />
                   </div>
 
-                  {/* CEO Information */}
+                  {/* Principal Information */}
                   <div className="space-y-3 pt-4 border-t border-white/10">
-                    <label className="block text-xs text-white/60 mb-2">CEO Information</label>
+                    <label className="block text-xs text-white/60 mb-2">Principal Information</label>
                     <Input
                       value={draft.ceoName}
                       onChange={(event) => setDraft((prev) => ({ ...prev, ceoName: event.target.value }))}
-                      placeholder="CEO Name"
+                      placeholder="Principal Name"
                       className="h-10 bg-white/10 text-white placeholder:text-white/40"
                     />
-                    <Input
-                      value={draft.ceoPhotoUrl}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, ceoPhotoUrl: event.target.value }))}
-                      placeholder="CEO Photo URL"
-                      className="h-10 bg-white/10 text-white placeholder:text-white/40"
-                    />
-                    {draft.ceoPhotoUrl && (
-                      <div className="mt-2">
-                        <img
-                          src={draft.ceoPhotoUrl}
-                          alt="CEO Preview"
-                          className="h-16 w-16 rounded-full object-cover border border-white/20"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none'
-                          }}
-                        />
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-white/70">Principal Photo</p>
+                        {principalFile && (
+                          <button
+                            type="button"
+                            onClick={() => setPrincipalFile(null)}
+                            className="text-xs text-white/60 hover:text-white"
+                            disabled={uploadingPhotos || saving}
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
-                    )}
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/20 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-4 pb-5">
+                          <Upload className="h-5 w-5 text-white/60 mb-2" />
+                          <p className="text-xs text-white/80 font-medium">
+                            {uploadingPhotos ? "Uploading..." : "Click to upload photo"}
+                          </p>
+                          <p className="text-[10px] text-white/50 mt-1">PNG, JPG up to 10MB</p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handlePrincipalUpload}
+                          disabled={uploadingPhotos || saving}
+                        />
+                      </label>
+                      {principalFile ? (
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={URL.createObjectURL(principalFile)}
+                            alt="Principal preview"
+                            className="h-14 w-14 rounded-full object-cover border border-white/20"
+                          />
+                          <div className="text-xs text-white/60">
+                            <p className="font-semibold text-white/80">{principalFile.name}</p>
+                            <p>{(principalFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                          </div>
+                        </div>
+                      ) : (
+                        draft.ceoPhotoUrl && (
+                          <div className="mt-2">
+                            <img
+                              src={draft.ceoPhotoUrl}
+                              alt="Principal"
+                              className="h-16 w-16 rounded-full object-cover border border-white/20"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none"
+                              }}
+                            />
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -2301,9 +2476,9 @@ function ListingsPanel({
               {activeFormSection === "photos" && (
                 <div>
                   <label className="block text-xs text-white/60 mb-2">Photos</label>
-                  <p className="text-xs text-white/40 mb-3">
-                    Upload photos directly or enter image URLs. Maximum 10 photos total.
-                  </p>
+              <p className="text-xs text-white/40 mb-3">
+                Upload photos directly. Maximum 10 photos total.
+              </p>
                   
                   {/* File Upload */}
                   <div className="mb-4">
@@ -2362,24 +2537,9 @@ function ListingsPanel({
                     </div>
                   )}
 
-                  {/* URL Input (Alternative/Additional) */}
-                  <details className="mb-4">
-                    <summary className="text-xs text-white/60 cursor-pointer hover:text-white/80 mb-2">
-                      Or enter photo URLs manually (one per line)
-                    </summary>
-                    <Textarea
-                      value={draft.photos}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, photos: event.target.value }))}
-                      placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg&#10;https://example.com/photo3.jpg"
-                      className="mt-2 min-h-[100px] bg-white/10 text-white placeholder:text-white/40"
-                      rows={4}
-                      disabled={uploadingPhotos || saving}
-                    />
-                  </details>
-                  
-                  {/* Combined Photo Preview */}
-                  {(() => {
-                    const photoUrls = draft.photos
+              {/* Combined Photo Preview */}
+              {(() => {
+                const photoUrls = draft.photos
                       .split("\n")
                       .map((url) => url.trim())
                       .filter((url) => url !== "" && (url.startsWith("http://") || url.startsWith("https://")))

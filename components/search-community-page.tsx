@@ -880,13 +880,6 @@ export default function SearchCommunityPage() {
           </button>
         ) : null}
         <div className="absolute right-2 top-8 flex items-center gap-2 z-10">
-          <button
-            type="button"
-            onClick={handleGATestClick}
-            className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#111827] hover:bg-[#F9FAFB] transition-colors"
-          >
-            GA Test
-          </button>
           {!selectedListing && (
             <button
               type="button"
@@ -943,16 +936,18 @@ export default function SearchCommunityPage() {
 
           <nav className="mt-6 border-b border-[#E5E7EB]">
             <div className="flex items-end gap-8">
-              {detailTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setDetailTab(tab.id)}
-                  className={`relative pb-3 text-[15px] font-semibold transition-colors ${
-                    detailTab === tab.id ? "text-[#111827]" : "text-[#6B7280]"
-                  }`}
-                >
-                  {tab.label}
+                {detailTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setDetailTab(tab.id)}
+                    className={`relative pb-3 text-[15px] font-semibold transition-colors ${
+                      detailTab === tab.id ? "text-[#111827]" : "text-[#6B7280]"
+                    }`}
+                  >
+                  {tab.id === "others" && (activeTab === "School" || activeTab === "Kindergarden")
+                    ? "Others"
+                    : tab.label}
                   {detailTab === tab.id && (
                     <div className="absolute left-0 right-0 -bottom-px h-1 bg-orange-500" />
                   )}
@@ -1079,8 +1074,8 @@ export default function SearchCommunityPage() {
                   1: totalReviews > 0 ? Math.round((distribution[1] / totalReviews) * 100) : 0,
                 }
                 
-                // Calculate CEO approval (using average rating as proxy, or can be separate field)
-                const ceoApprovalPercentage = averageRating > 0 ? Math.round((averageRating / 5) * 100) : 0
+                // Calculate principal approval (using average rating as proxy)
+                const principalApprovalPercentage = averageRating > 0 ? Math.round((averageRating / 5) * 100) : 0
                 
                 return (
                   <>
@@ -1108,7 +1103,7 @@ export default function SearchCommunityPage() {
                       )}
                     </div>
 
-                    {/* CEO Approval */}
+                    {/* Principal Approval */}
                     {selectedListing.ceoName && (
                       <div className="flex items-center gap-3">
                         {selectedListing.ceoPhotoUrl ? (
@@ -1127,7 +1122,7 @@ export default function SearchCommunityPage() {
                         )}
                         <div>
                           <p className="text-sm font-semibold text-[#111827]">{selectedListing.ceoName}</p>
-                          <p className="text-xs text-[#6B7280]">{ceoApprovalPercentage}% approve of CEO</p>
+                          <p className="text-xs text-[#6B7280]">{principalApprovalPercentage}% approve of Principal</p>
                         </div>
                       </div>
                     )}
