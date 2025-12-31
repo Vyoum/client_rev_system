@@ -142,11 +142,6 @@ export default function SearchCommunityPage() {
   const scrollDepthSent = useRef(new Set<number>())
   const isSignedIn = Boolean(currentUser)
 
-  const handleGATestClick = () => {
-    if (typeof (window as Window & { gtag?: (...args: any[]) => void }).gtag === "function") {
-      sendGAEvent({ event: "ga_test_click", source: "manual_button" })
-    }
-  }
 
   const filteredStates = useMemo(() => {
     const query = locationQuery.trim().toLowerCase()
@@ -970,10 +965,19 @@ export default function SearchCommunityPage() {
             <div className="mt-5 space-y-4">
               <div className="rounded-xl border border-[#E5E7EB] bg-white p-6">
                 <h3 className="text-lg font-semibold text-[#111827] mb-4">What's New</h3>
-                <div className="space-y-3 text-sm text-[#4B5563]">
-                  <p>Stay updated with the latest news and updates about this listing.</p>
-                  <p className="text-[#6B7280]">Recent updates and announcements will appear here.</p>
-                </div>
+                {selectedListing.whatsNew ? (
+                  <div className="space-y-2 text-sm text-[#4B5563]">
+                    {selectedListing.whatsNew
+                      .split("\n")
+                      .map((line) => line.trim())
+                      .filter(Boolean)
+                      .map((line, index) => (
+                        <p key={`${selectedListing.id}-whatsnew-${index}`}>{line}</p>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6B7280]">No updates yet.</p>
+                )}
               </div>
             </div>
           ) : detailTab === "about" ? (
@@ -1706,22 +1710,24 @@ export default function SearchCommunityPage() {
                             className="w-full px-5 py-4 text-left transition-colors hover:bg-[#F9FAFB]"
                           >
                             <div className="w-full">
-                              {listing.logoUrl ? (
-                                <img
-                                  src={listing.logoUrl}
-                                  alt={listing.name}
-                                  className="h-44 w-full rounded-2xl border border-[#E5E7EB] object-cover sm:h-52"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="flex h-44 w-full items-center justify-center rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#6B7280] sm:h-52">
-                                  No image available
-                                </div>
-                              )}
-                              <div className="mt-3">
+                              <div>
                                 <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
                                 {listing.description && (
                                   <p className="mt-1 text-sm text-[#6B7280]">{listing.description}</p>
+                                )}
+                              </div>
+                              <div className="mt-3">
+                                {listing.logoUrl ? (
+                                  <img
+                                    src={listing.logoUrl}
+                                    alt={listing.name}
+                                    className="h-44 w-full rounded-2xl border border-[#E5E7EB] object-cover sm:h-52"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="flex h-44 w-full items-center justify-center rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#6B7280] sm:h-52">
+                                    No image available
+                                  </div>
                                 )}
                               </div>
                             </div>
