@@ -142,6 +142,12 @@ export default function SearchCommunityPage() {
   const scrollDepthSent = useRef(new Set<number>())
   const isSignedIn = Boolean(currentUser)
 
+  const handleGATestClick = () => {
+    if (typeof (window as Window & { gtag?: (...args: any[]) => void }).gtag === "function") {
+      sendGAEvent({ event: "ga_test_click", source: "manual_button" })
+    }
+  }
+
   const filteredStates = useMemo(() => {
     const query = locationQuery.trim().toLowerCase()
     if (!query) return INDIA_LOCATIONS
@@ -303,28 +309,22 @@ export default function SearchCommunityPage() {
     })
   }
 
-  // Load reviews for selected listing
+  // Load reviews for selected listing (only when the Reviews tab is open)
   useEffect(() => {
     if (!selectedListing) {
       setReviews([])
+      setReviewsLoading(false)
+      return
+    }
+
+    if (detailTab !== "reviews") {
+      setReviewsLoading(false)
       return
     }
 
     setReviewsLoading(true)
     const reviewsRef = collection(db, "reviews")
-    
-    // Try with orderBy first, fallback to simple query if index is missing
-    let reviewsQuery
-    try {
-      reviewsQuery = query(
-        reviewsRef,
-        where("listingId", "==", selectedListing.id),
-        orderBy("createdAt", "desc")
-      )
-    } catch (error) {
-      // If orderBy fails, use simple query
-      reviewsQuery = query(reviewsRef, where("listingId", "==", selectedListing.id))
-    }
+    const reviewsQuery = query(reviewsRef, where("listingId", "==", selectedListing.id))
 
     const unsubscribe = onSnapshot(
       reviewsQuery,
@@ -347,16 +347,18 @@ export default function SearchCommunityPage() {
           })
           .sort((a, b) => {
             // Client-side sort by createdAt (newest first)
-            const aTime = a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
-              ? a.createdAt.toDate().getTime()
-              : typeof a.createdAt === "string"
-              ? new Date(a.createdAt).getTime()
-              : 0
-            const bTime = b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
-              ? b.createdAt.toDate().getTime()
-              : typeof b.createdAt === "string"
-              ? new Date(b.createdAt).getTime()
-              : 0
+            const aTime =
+              a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
+                ? a.createdAt.toDate().getTime()
+                : typeof a.createdAt === "string"
+                ? new Date(a.createdAt).getTime()
+                : 0
+            const bTime =
+              b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
+                ? b.createdAt.toDate().getTime()
+                : typeof b.createdAt === "string"
+                ? new Date(b.createdAt).getTime()
+                : 0
             return bTime - aTime
           })
         setReviews(nextReviews)
@@ -364,60 +366,13 @@ export default function SearchCommunityPage() {
       },
       (error) => {
         console.error("Error loading reviews:", error)
-        // If query with orderBy fails, try without orderBy
-        if (error.code === "failed-precondition") {
-          const fallbackQuery = query(reviewsRef, where("listingId", "==", selectedListing.id))
-          const fallbackUnsubscribe = onSnapshot(
-            fallbackQuery,
-            (snapshot) => {
-              const nextReviews = snapshot.docs
-                .map((doc) => {
-                  const data = doc.data()
-                  return {
-                    id: doc.id,
-                    listingId: data.listingId || "",
-                    authorName: data.authorName || "Anonymous",
-                    authorId: data.authorId || "",
-                    rating: data.rating || 0,
-                    message: data.message || "",
-                    createdAt: data.createdAt || serverTimestamp(),
-                    updatedAt: data.updatedAt,
-                    likes: typeof data.likes === "number" ? data.likes : 0,
-                    likedBy: Array.isArray(data.likedBy) ? data.likedBy : [],
-                  }
-                })
-                .sort((a, b) => {
-                  const aTime = a.createdAt && typeof a.createdAt === "object" && "toDate" in a.createdAt
-                    ? a.createdAt.toDate().getTime()
-                    : typeof a.createdAt === "string"
-                    ? new Date(a.createdAt).getTime()
-                    : 0
-                  const bTime = b.createdAt && typeof b.createdAt === "object" && "toDate" in b.createdAt
-                    ? b.createdAt.toDate().getTime()
-                    : typeof b.createdAt === "string"
-                    ? new Date(b.createdAt).getTime()
-                    : 0
-                  return bTime - aTime
-                })
-              setReviews(nextReviews)
-              setReviewsLoading(false)
-            },
-            (fallbackError) => {
-              console.error("Error loading reviews (fallback):", fallbackError)
-              setReviews([])
-              setReviewsLoading(false)
-            }
-          )
-          return () => fallbackUnsubscribe()
-        } else {
-          setReviews([])
-          setReviewsLoading(false)
-        }
+        setReviews([])
+        setReviewsLoading(false)
       }
     )
 
     return () => unsubscribe()
-  }, [selectedListing])
+  }, [selectedListing, detailTab])
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -928,16 +883,26 @@ export default function SearchCommunityPage() {
           >
             <ChevronLeft className="h-5 w-5 text-[#111827]" />
           </button>
-        ) : (
+        ) : null}
+        <div className="absolute right-2 top-8 flex items-center gap-2 z-10">
           <button
             type="button"
-            onClick={() => setIsSignInOpen(true)}
-            className="absolute right-2 top-8 p-2 rounded-full hover:bg-black/5 transition-colors z-10"
-            aria-label="Open profile"
+            onClick={handleGATestClick}
+            className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#111827] hover:bg-[#F9FAFB] transition-colors"
           >
-            <User className="h-6 w-6 text-[#111827]" />
+            GA Test
           </button>
-        )}
+          {!selectedListing && (
+            <button
+              type="button"
+              onClick={() => setIsSignInOpen(true)}
+              className="p-2 rounded-full hover:bg-black/5 transition-colors"
+              aria-label="Open profile"
+            >
+              <User className="h-6 w-6 text-[#111827]" />
+            </button>
+          )}
+        </div>
       </header>
 
       {selectedListing ? (
