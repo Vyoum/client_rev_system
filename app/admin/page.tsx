@@ -1572,6 +1572,9 @@ function ListingsPanel({
 
       const courseName = draft.courseName.trim()
       if (courseName) listingData.courseName = courseName
+      if (isCoursesForm && !courseName && trimmedName) {
+        listingData.courseName = trimmedName
+      }
 
       const courseField = draft.courseField.trim()
       if (courseField) listingData.courseField = courseField
@@ -2696,6 +2699,15 @@ function ListingsPanel({
 
         {isCoursesForm && (
           <div className="mt-6 space-y-4">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+              <label className="block text-xs font-semibold text-white/70">Course field</label>
+              <Input
+                value={draft.courseField}
+                onChange={(event) => setDraft((prev) => ({ ...prev, courseField: event.target.value }))}
+                placeholder="Engineering, Medical, Law..."
+                className="h-10 bg-white/10 text-white placeholder:text-white/40"
+              />
+            </div>
             <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-white/70">Colleges offering this course</p>
