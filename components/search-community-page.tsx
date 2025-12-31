@@ -12,8 +12,7 @@ import {
   arrayUnion,
   collection,
   doc,
-  onSnapshot,
-  orderBy,
+  getDocs,
   query,
   serverTimestamp,
   Timestamp,
@@ -252,7 +251,7 @@ export default function SearchCommunityPage() {
   }
 
   // Load reviews for all listings to calculate average ratings
-  const loadReviewsForListings = (listingIds: string[]) => {
+  const loadReviewsForListings = async (listingIds: string[]) => {
     if (listingIds.length === 0) return
 
     // Firestore 'in' query supports max 10 items, so we need to batch
@@ -260,49 +259,46 @@ export default function SearchCommunityPage() {
     for (let i = 0; i < listingIds.length; i += 10) {
       batches.push(listingIds.slice(i, i + 10))
     }
-
-    batches.forEach((batch) => {
+    try {
       const reviewsRef = collection(db, "reviews")
-      const reviewsQuery = query(reviewsRef, where("listingId", "in", batch))
-
-      const unsubscribe = onSnapshot(
-        reviewsQuery,
-        (snapshot) => {
-          const reviewsByListing: Record<string, number[]> = {}
-          
-          snapshot.docs.forEach((doc) => {
-            const data = doc.data()
-            const listingId = data.listingId
-            const rating = typeof data.rating === "number" ? data.rating : null
-            
-            if (listingId && rating !== null && rating >= 1 && rating <= 5) {
-              if (!reviewsByListing[listingId]) {
-                reviewsByListing[listingId] = []
-              }
-              reviewsByListing[listingId].push(rating)
-            }
-          })
-
-          // Calculate average ratings
-          setCalculatedRatings((prev) => {
-            const newRatings = { ...prev }
-            Object.keys(reviewsByListing).forEach((listingId) => {
-              const ratings = reviewsByListing[listingId]
-              const sum = ratings.reduce((acc, rating) => acc + rating, 0)
-              const average = sum / ratings.length
-              newRatings[listingId] = {
-                average: Math.round(average * 10) / 10, // Round to 1 decimal place
-                count: ratings.length
-              }
-            })
-            return newRatings
-          })
-        },
-        (error) => {
-          console.error("Error loading reviews for listings:", error)
-        }
+      const snapshots = await Promise.all(
+        batches.map((batch) => getDocs(query(reviewsRef, where("listingId", "in", batch))))
       )
-    })
+
+      const reviewsByListing: Record<string, number[]> = {}
+
+      snapshots.forEach((snapshot) => {
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data()
+          const listingId = data.listingId
+          const rating = typeof data.rating === "number" ? data.rating : null
+
+          if (listingId && rating !== null && rating >= 1 && rating <= 5) {
+            if (!reviewsByListing[listingId]) {
+              reviewsByListing[listingId] = []
+            }
+            reviewsByListing[listingId].push(rating)
+          }
+        })
+      })
+
+      // Calculate average ratings
+      setCalculatedRatings((prev) => {
+        const newRatings = { ...prev }
+        Object.keys(reviewsByListing).forEach((listingId) => {
+          const ratings = reviewsByListing[listingId]
+          const sum = ratings.reduce((acc, rating) => acc + rating, 0)
+          const average = sum / ratings.length
+          newRatings[listingId] = {
+            average: Math.round(average * 10) / 10, // Round to 1 decimal place
+            count: ratings.length,
+          }
+        })
+        return newRatings
+      })
+    } catch (error) {
+      console.error("Error loading reviews for listings:", error)
+    }
   }
 
   // Load reviews for selected listing (only when the Reviews tab is open)
@@ -318,13 +314,15 @@ export default function SearchCommunityPage() {
       return
     }
 
-    setReviewsLoading(true)
-    const reviewsRef = collection(db, "reviews")
-    const reviewsQuery = query(reviewsRef, where("listingId", "==", selectedListing.id))
+    let isMounted = true
+    const fetchReviews = async () => {
+      setReviewsLoading(true)
+      const reviewsRef = collection(db, "reviews")
+      const reviewsQuery = query(reviewsRef, where("listingId", "==", selectedListing.id))
 
-    const unsubscribe = onSnapshot(
-      reviewsQuery,
-      (snapshot) => {
+      try {
+        const snapshot = await getDocs(reviewsQuery)
+        if (!isMounted) return
         const nextReviews = snapshot.docs
           .map((doc) => {
             const data = doc.data()
@@ -359,15 +357,18 @@ export default function SearchCommunityPage() {
           })
         setReviews(nextReviews)
         setReviewsLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Error loading reviews:", error)
         setReviews([])
         setReviewsLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchReviews()
+    return () => {
+      isMounted = false
+    }
   }, [selectedListing, detailTab])
 
   const handleSubmitReview = async (e: React.FormEvent) => {
@@ -614,16 +615,18 @@ export default function SearchCommunityPage() {
   // Load listings from Firestore based on active tab
   useEffect(() => {
     const collectionName = getCollectionName(activeTab)
-    setListingsLoading(true)
+    let isMounted = true
+    const fetchListings = async () => {
+      setListingsLoading(true)
 
-    const listingsRef = collection(db, collectionName)
-    // Use simple query and sort client-side to avoid index requirements
-    // For production, create a composite index: (status, updatedAt) in Firestore console
-    const listingsQuery = query(listingsRef)
+      const listingsRef = collection(db, collectionName)
+      // Use simple query and sort client-side to avoid index requirements
+      // For production, create a composite index: (status, updatedAt) in Firestore console
+      const listingsQuery = query(listingsRef)
 
-    const unsubscribe = onSnapshot(
-      listingsQuery,
-      (snapshot) => {
+      try {
+        const snapshot = await getDocs(listingsQuery)
+        if (!isMounted) return
         const nextListings = snapshot.docs
           .map((doc) => {
             const data = doc.data()
@@ -700,21 +703,24 @@ export default function SearchCommunityPage() {
             setCoursesSeedError(null)
           }
         }
-        
+
         // Load reviews for all listings to calculate average ratings
         if (nextListings.length > 0) {
-          const listingIds = nextListings.map(l => l.id)
-          loadReviewsForListings(listingIds)
+          const listingIds = nextListings.map((listing) => listing.id)
+          void loadReviewsForListings(listingIds)
         }
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Error loading listings:", error)
         setListings([])
         setListingsLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchListings()
+    return () => {
+      isMounted = false
+    }
   }, [activeTab])
 
   useEffect(() => {
@@ -740,10 +746,11 @@ export default function SearchCommunityPage() {
 
     const collegesRef = collection(db, "colleges")
     const collegesQuery = query(collegesRef, where("courseIds", "array-contains", expandedCourseId))
-
-    const unsubscribe = onSnapshot(
-      collegesQuery,
-      (snapshot) => {
+    let isMounted = true
+    const fetchCourseColleges = async () => {
+      try {
+        const snapshot = await getDocs(collegesQuery)
+        if (!isMounted) return
         const nextColleges: CollegeSummary[] = snapshot.docs
           .map((doc) => {
             const data = doc.data() as Record<string, unknown>
@@ -759,16 +766,19 @@ export default function SearchCommunityPage() {
           .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
         setExpandedCourseColleges(nextColleges)
         setExpandedCourseCollegesLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Error loading course colleges:", error)
         setExpandedCourseColleges([])
         setExpandedCourseCollegesLoading(false)
         setExpandedCourseCollegesError(error?.message ?? "Unable to load colleges for this course.")
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchCourseColleges()
+    return () => {
+      isMounted = false
+    }
   }, [activeTab, expandedCourseId])
 
   // Filter listings based on search query and location

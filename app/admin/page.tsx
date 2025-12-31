@@ -9,7 +9,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  onSnapshot,
+  getDocs,
   orderBy,
   query,
   addDoc,
@@ -150,6 +150,17 @@ const parseOptionalNumber = (value: unknown): number | null => {
   if (value === null || value === undefined || value === "") return null
   const parsed = typeof value === "number" ? value : Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+const getDocsWithFallback = async (primaryQuery: any, fallbackQuery: any) => {
+  try {
+    return await getDocs(primaryQuery)
+  } catch (error: any) {
+    if (error?.code === "failed-precondition") {
+      return await getDocs(fallbackQuery)
+    }
+    throw error
+  }
 }
 
 const mapListingData = (doc: any): ListingItem => {
@@ -296,18 +307,21 @@ export default function AdminPage() {
       setReviewsLoading(false)
       return
     }
-    setReviewsLoading(true)
-    const reviewsRef = collection(db, "reviews")
-    let reviewsQuery
-    try {
-      reviewsQuery = query(reviewsRef, orderBy("createdAt", "desc"))
-    } catch (error) {
-      reviewsQuery = query(reviewsRef)
-    }
+    let isMounted = true
+    const fetchReviews = async () => {
+      setReviewsLoading(true)
+      const reviewsRef = collection(db, "reviews")
+      let reviewsQuery
+      try {
+        reviewsQuery = query(reviewsRef, orderBy("createdAt", "desc"))
+      } catch (error) {
+        reviewsQuery = query(reviewsRef)
+      }
 
-    const unsubscribe = onSnapshot(
-      reviewsQuery,
-      async (snapshot) => {
+      try {
+        const snapshot = await getDocsWithFallback(reviewsQuery, query(reviewsRef))
+        if (!isMounted) return
+
         // Get all listing IDs from reviews
         const listingIds = new Set<string>()
         snapshot.docs.forEach((doc) => {
@@ -320,7 +334,7 @@ export default function AdminPage() {
         // Fetch listing names from all collections
         const listingNames: Record<string, string> = {}
         const collections = ["feed", "school", "colleges", "kindergarden", "courses"]
-        
+
         for (const collectionName of collections) {
           for (const listingId of listingIds) {
             if (!listingNames[listingId]) {
@@ -341,7 +355,7 @@ export default function AdminPage() {
           const data = doc.data()
           const listingId = data.listingId || ""
           const listingName = listingNames[listingId] || listingId || "Unknown Listing"
-          
+
           return {
             id: doc.id,
             author: data.authorName || data.author || "Anonymous",
@@ -354,76 +368,18 @@ export default function AdminPage() {
         })
         setReviews(nextReviews)
         setReviewsLoading(false)
-      },
-      (error) => {
+      } catch (error: any) {
+        if (!isMounted) return
         console.error("Loading reviews failed:", error)
-        if (error.code === "failed-precondition") {
-          const fallbackQuery = query(reviewsRef)
-          const fallbackUnsubscribe = onSnapshot(
-            fallbackQuery,
-            async (snapshot) => {
-              // Get all listing IDs from reviews
-              const listingIds = new Set<string>()
-              snapshot.docs.forEach((doc) => {
-                const data = doc.data()
-                if (data.listingId) {
-                  listingIds.add(data.listingId)
-                }
-              })
-
-              // Fetch listing names from all collections
-              const listingNames: Record<string, string> = {}
-              const collections = ["feed", "school", "colleges", "kindergarden", "courses"]
-              
-              for (const collectionName of collections) {
-                for (const listingId of listingIds) {
-                  if (!listingNames[listingId]) {
-                    try {
-                      const listingDocRef = doc(db, collectionName, listingId)
-                      const listingDoc = await getDoc(listingDocRef)
-                      if (listingDoc.exists()) {
-                        listingNames[listingId] = listingDoc.data()?.name || listingId
-                      }
-                    } catch (error) {
-                      // Collection might not have this document, continue
-                    }
-                  }
-                }
-              }
-
-              const nextReviews = snapshot.docs.map((doc) => {
-                const data = doc.data()
-                const listingId = data.listingId || ""
-                const listingName = listingNames[listingId] || listingId || "Unknown Listing"
-                
-                return {
-                  id: doc.id,
-                  author: data.authorName || data.author || "Anonymous",
-                  rating: typeof data.rating === "number" ? data.rating : 0,
-                  message: data.message || "",
-                  source: listingId ? listingName : "User Review",
-                  status: (data.status || "Visible") as ReviewStatus,
-                  createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : formatTimestamp(data.createdAt),
-                }
-              })
-              setReviews(nextReviews)
-              setReviewsLoading(false)
-            },
-            (fallbackError) => {
-              console.error("Loading reviews failed (fallback):", fallbackError)
-              setReviews([])
-              setReviewsLoading(false)
-            }
-          )
-          return () => fallbackUnsubscribe()
-        } else {
-          setReviews([])
-          setReviewsLoading(false)
-        }
+        setReviews([])
+        setReviewsLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchReviews()
+    return () => {
+      isMounted = false
+    }
   }, [canManageReviews, currentUserLoading])
 
   // Load users
@@ -434,12 +390,14 @@ export default function AdminPage() {
       setUsersLoading(false)
       return
     }
-    setUsersLoading(true)
-    const usersRef = collection(db, "users")
-    const usersQuery = query(usersRef, orderBy("createdAt", "desc"))
-    const unsubscribe = onSnapshot(
-      usersQuery,
-      (snapshot) => {
+    let isMounted = true
+    const fetchUsers = async () => {
+      setUsersLoading(true)
+      const usersRef = collection(db, "users")
+      const usersQuery = query(usersRef, orderBy("createdAt", "desc"))
+      try {
+        const snapshot = await getDocsWithFallback(usersQuery, query(usersRef))
+        if (!isMounted) return
         const nextUsers = snapshot.docs.map((doc) => {
           const data = doc.data() as Partial<UserRecord>
           return {
@@ -455,16 +413,19 @@ export default function AdminPage() {
         setUsers(nextUsers)
         setUsersLoading(false)
         setUsersError(null)
-      },
-      (error) => {
+      } catch (error: any) {
+        if (!isMounted) return
         console.error("Loading users failed:", error)
         setUsers([])
         setUsersLoading(false)
         setUsersError(error?.message ?? "Unable to load users.")
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchUsers()
+    return () => {
+      isMounted = false
+    }
   }, [currentUserLoading, isAdmin, isSubadmin])
 
   // Load schools
@@ -475,20 +436,23 @@ export default function AdminPage() {
       setSchoolsLoading(false)
       return
     }
-    setSchoolsLoading(true)
-    const schoolsRef = collection(db, "feed")
-    // Try with orderBy first, fallback to simple query if index is missing
-    let schoolsQuery
-    try {
-      schoolsQuery = query(schoolsRef, orderBy("updatedAt", "desc"))
-    } catch (error) {
-      schoolsQuery = query(schoolsRef)
-    }
+    let isMounted = true
+    const fetchSchools = async () => {
+      setSchoolsLoading(true)
+      const schoolsRef = collection(db, "feed")
+      // Try with orderBy first, fallback to simple query if index is missing
+      let schoolsQuery
+      try {
+        schoolsQuery = query(schoolsRef, orderBy("updatedAt", "desc"))
+      } catch (error) {
+        schoolsQuery = query(schoolsRef)
+      }
 
-    const unsubscribe = onSnapshot(
-      schoolsQuery,
-      (snapshot) => {
-        const nextSchools = snapshot.docs.map(mapListingData)
+      try {
+        const snapshot = await getDocsWithFallback(schoolsQuery, query(schoolsRef))
+        if (!isMounted) return
+        const nextSchools = snapshot.docs
+          .map(mapListingData)
           .sort((a, b) => {
             // Client-side sort by updatedAt (newest first)
             const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
@@ -497,39 +461,18 @@ export default function AdminPage() {
           })
         setSchools(nextSchools)
         setSchoolsLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Loading feed failed:", error)
-        // If orderBy fails, try without it
-        if (error.code === "failed-precondition") {
-          const fallbackQuery = query(schoolsRef)
-          const fallbackUnsubscribe = onSnapshot(
-            fallbackQuery,
-            (snapshot) => {
-              const nextSchools = snapshot.docs.map(mapListingData)
-                .sort((a, b) => {
-                  const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
-                  const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
-                  return bTime - aTime
-                })
-              setSchools(nextSchools)
-              setSchoolsLoading(false)
-            },
-            (fallbackError) => {
-              console.error("Loading feed failed (fallback):", fallbackError)
-              setSchools([])
-              setSchoolsLoading(false)
-            }
-          )
-          return () => fallbackUnsubscribe()
-        } else {
-          setSchools([])
-          setSchoolsLoading(false)
-        }
+        setSchools([])
+        setSchoolsLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchSchools()
+    return () => {
+      isMounted = false
+    }
   }, [canManageListings, currentUserLoading])
 
   // Load colleges
@@ -540,18 +483,20 @@ export default function AdminPage() {
       setCollegesLoading(false)
       return
     }
-    setCollegesLoading(true)
-    const collegesRef = collection(db, "school")
-    let collegesQuery
-    try {
-      collegesQuery = query(collegesRef, orderBy("updatedAt", "desc"))
-    } catch (error) {
-      collegesQuery = query(collegesRef)
-    }
+    let isMounted = true
+    const fetchColleges = async () => {
+      setCollegesLoading(true)
+      const collegesRef = collection(db, "school")
+      let collegesQuery
+      try {
+        collegesQuery = query(collegesRef, orderBy("updatedAt", "desc"))
+      } catch (error) {
+        collegesQuery = query(collegesRef)
+      }
 
-    const unsubscribe = onSnapshot(
-      collegesQuery,
-      (snapshot) => {
+      try {
+        const snapshot = await getDocsWithFallback(collegesQuery, query(collegesRef))
+        if (!isMounted) return
         const nextColleges = snapshot.docs.map(mapListingData).sort((a, b) => {
           const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
           const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
@@ -559,37 +504,18 @@ export default function AdminPage() {
         })
         setColleges(nextColleges)
         setCollegesLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Loading school failed:", error)
-        if (error.code === "failed-precondition") {
-          const fallbackQuery = query(collegesRef)
-          const fallbackUnsubscribe = onSnapshot(
-            fallbackQuery,
-            (snapshot) => {
-              const nextColleges = snapshot.docs.map(mapListingData).sort((a, b) => {
-                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
-                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
-                return bTime - aTime
-              })
-              setColleges(nextColleges)
-              setCollegesLoading(false)
-            },
-            (fallbackError) => {
-              console.error("Loading school failed (fallback):", fallbackError)
-              setColleges([])
-              setCollegesLoading(false)
-            }
-          )
-          return () => fallbackUnsubscribe()
-        } else {
-          setColleges([])
-          setCollegesLoading(false)
-        }
+        setColleges([])
+        setCollegesLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchColleges()
+    return () => {
+      isMounted = false
+    }
   }, [canManageListings, currentUserLoading])
 
   // Load jobs
@@ -600,18 +526,20 @@ export default function AdminPage() {
       setJobsLoading(false)
       return
     }
-    setJobsLoading(true)
-    const jobsRef = collection(db, "colleges")
-    let jobsQuery
-    try {
-      jobsQuery = query(jobsRef, orderBy("updatedAt", "desc"))
-    } catch (error) {
-      jobsQuery = query(jobsRef)
-    }
+    let isMounted = true
+    const fetchJobs = async () => {
+      setJobsLoading(true)
+      const jobsRef = collection(db, "colleges")
+      let jobsQuery
+      try {
+        jobsQuery = query(jobsRef, orderBy("updatedAt", "desc"))
+      } catch (error) {
+        jobsQuery = query(jobsRef)
+      }
 
-    const unsubscribe = onSnapshot(
-      jobsQuery,
-      (snapshot) => {
+      try {
+        const snapshot = await getDocsWithFallback(jobsQuery, query(jobsRef))
+        if (!isMounted) return
         const nextJobs = snapshot.docs.map(mapListingData).sort((a, b) => {
           const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
           const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
@@ -619,37 +547,18 @@ export default function AdminPage() {
         })
         setJobs(nextJobs)
         setJobsLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Loading colleges failed:", error)
-        if (error.code === "failed-precondition") {
-          const fallbackQuery = query(jobsRef)
-          const fallbackUnsubscribe = onSnapshot(
-            fallbackQuery,
-            (snapshot) => {
-              const nextJobs = snapshot.docs.map(mapListingData).sort((a, b) => {
-                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
-                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
-                return bTime - aTime
-              })
-              setJobs(nextJobs)
-              setJobsLoading(false)
-            },
-            (fallbackError) => {
-              console.error("Loading colleges failed (fallback):", fallbackError)
-              setJobs([])
-              setJobsLoading(false)
-            }
-          )
-          return () => fallbackUnsubscribe()
-        } else {
-          setJobs([])
-          setJobsLoading(false)
-        }
+        setJobs([])
+        setJobsLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchJobs()
+    return () => {
+      isMounted = false
+    }
   }, [canManageListings, currentUserLoading])
 
   // Load companies
@@ -660,18 +569,20 @@ export default function AdminPage() {
       setCompaniesLoading(false)
       return
     }
-    setCompaniesLoading(true)
-    const companiesRef = collection(db, "kindergarden")
-    let companiesQuery
-    try {
-      companiesQuery = query(companiesRef, orderBy("updatedAt", "desc"))
-    } catch (error) {
-      companiesQuery = query(companiesRef)
-    }
+    let isMounted = true
+    const fetchCompanies = async () => {
+      setCompaniesLoading(true)
+      const companiesRef = collection(db, "kindergarden")
+      let companiesQuery
+      try {
+        companiesQuery = query(companiesRef, orderBy("updatedAt", "desc"))
+      } catch (error) {
+        companiesQuery = query(companiesRef)
+      }
 
-    const unsubscribe = onSnapshot(
-      companiesQuery,
-      (snapshot) => {
+      try {
+        const snapshot = await getDocsWithFallback(companiesQuery, query(companiesRef))
+        if (!isMounted) return
         const nextCompanies = snapshot.docs.map(mapListingData).sort((a, b) => {
           const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
           const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
@@ -679,37 +590,18 @@ export default function AdminPage() {
         })
         setCompanies(nextCompanies)
         setCompaniesLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Loading kindergarden failed:", error)
-        if (error.code === "failed-precondition") {
-          const fallbackQuery = query(companiesRef)
-          const fallbackUnsubscribe = onSnapshot(
-            fallbackQuery,
-            (snapshot) => {
-              const nextCompanies = snapshot.docs.map(mapListingData).sort((a, b) => {
-                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
-                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
-                return bTime - aTime
-              })
-              setCompanies(nextCompanies)
-              setCompaniesLoading(false)
-            },
-            (fallbackError) => {
-              console.error("Loading kindergarden failed (fallback):", fallbackError)
-              setCompanies([])
-              setCompaniesLoading(false)
-            }
-          )
-          return () => fallbackUnsubscribe()
-        } else {
-          setCompanies([])
-          setCompaniesLoading(false)
-        }
+        setCompanies([])
+        setCompaniesLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchCompanies()
+    return () => {
+      isMounted = false
+    }
   }, [canManageListings, currentUserLoading])
 
   // Load courses
@@ -720,18 +612,20 @@ export default function AdminPage() {
       setCoursesLoading(false)
       return
     }
-    setCoursesLoading(true)
-    const coursesRef = collection(db, "courses")
-    let coursesQuery
-    try {
-      coursesQuery = query(coursesRef, orderBy("updatedAt", "desc"))
-    } catch (error) {
-      coursesQuery = query(coursesRef)
-    }
+    let isMounted = true
+    const fetchCourses = async () => {
+      setCoursesLoading(true)
+      const coursesRef = collection(db, "courses")
+      let coursesQuery
+      try {
+        coursesQuery = query(coursesRef, orderBy("updatedAt", "desc"))
+      } catch (error) {
+        coursesQuery = query(coursesRef)
+      }
 
-    const unsubscribe = onSnapshot(
-      coursesQuery,
-      (snapshot) => {
+      try {
+        const snapshot = await getDocsWithFallback(coursesQuery, query(coursesRef))
+        if (!isMounted) return
         const nextCourses = snapshot.docs.map(mapListingData).sort((a, b) => {
           const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
           const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
@@ -739,37 +633,18 @@ export default function AdminPage() {
         })
         setCourses(nextCourses)
         setCoursesLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Loading courses failed:", error)
-        if (error.code === "failed-precondition") {
-          const fallbackQuery = query(coursesRef)
-          const fallbackUnsubscribe = onSnapshot(
-            fallbackQuery,
-            (snapshot) => {
-              const nextCourses = snapshot.docs.map(mapListingData).sort((a, b) => {
-                const aTime = typeof a.updatedAt === "string" ? new Date(a.updatedAt).getTime() : 0
-                const bTime = typeof b.updatedAt === "string" ? new Date(b.updatedAt).getTime() : 0
-                return bTime - aTime
-              })
-              setCourses(nextCourses)
-              setCoursesLoading(false)
-            },
-            (fallbackError) => {
-              console.error("Loading courses failed (fallback):", fallbackError)
-              setCourses([])
-              setCoursesLoading(false)
-            }
-          )
-          return () => fallbackUnsubscribe()
-        } else {
-          setCourses([])
-          setCoursesLoading(false)
-        }
+        setCourses([])
+        setCoursesLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchCourses()
+    return () => {
+      isMounted = false
+    }
   }, [canManageListings, currentUserLoading])
 
   const filteredUsers = useMemo(() => {
@@ -1296,11 +1171,13 @@ function ListingsPanel({
 
   useEffect(() => {
     if (!isCoursesForm) return
-    setCollegeOptionsLoading(true)
-    const collegesRef = collection(db, "colleges")
-    const unsubscribe = onSnapshot(
-      query(collegesRef),
-      (snapshot) => {
+    let isMounted = true
+    const fetchCollegeOptions = async () => {
+      setCollegeOptionsLoading(true)
+      const collegesRef = collection(db, "colleges")
+      try {
+        const snapshot = await getDocs(query(collegesRef))
+        if (!isMounted) return
         const nextColleges = snapshot.docs
           .map((doc) => {
             const data = doc.data() as Record<string, unknown>
@@ -1315,15 +1192,18 @@ function ListingsPanel({
           .sort((a, b) => a.name.localeCompare(b.name))
         setCollegeOptions(nextColleges)
         setCollegeOptionsLoading(false)
-      },
-      (error) => {
+      } catch (error) {
+        if (!isMounted) return
         console.error("Loading colleges list failed:", error)
         setCollegeOptions([])
         setCollegeOptionsLoading(false)
       }
-    )
+    }
 
-    return () => unsubscribe()
+    void fetchCollegeOptions()
+    return () => {
+      isMounted = false
+    }
   }, [isCoursesForm])
 
   const filteredItems = useMemo(() => {
