@@ -1852,7 +1852,7 @@ function ListingsPanel({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-      <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
+      <div className="min-w-0 rounded-2xl border border-white/10 bg-[#121518] p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold">{label} listings</h2>
@@ -1948,7 +1948,7 @@ function ListingsPanel({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[#121518] p-6">
+      <div className="min-w-0 rounded-2xl border border-white/10 bg-[#121518] p-6 overflow-x-hidden">
         <h3 className="text-lg font-semibold">{editingId ? `Edit ${label}` : `Add ${label}`}</h3>
         <p className="text-sm text-white/60">Fill in the details and save.</p>
         <p className="text-xs text-white/40">Firestore collection: {collectionName}</p>
@@ -2545,7 +2545,7 @@ function ListingsPanel({
                 className="h-9 bg-white/10 text-white placeholder:text-white/40 w-full"
                 disabled={saving}
               />
-              <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-56 overflow-y-auto overflow-x-hidden space-y-2 pr-1">
                 {collegeOptionsLoading ? (
                   <p className="text-sm text-white/60">Loading colleges...</p>
                 ) : filteredCollegeOptions.length === 0 ? (
@@ -2561,28 +2561,30 @@ function ListingsPanel({
                         return (
                           <div
                             key={college.id}
-                            className="flex flex-wrap items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10"
+                            className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10 lg:flex-row lg:flex-wrap lg:items-start"
                           >
-                            <input
-                              type="checkbox"
-                              className="mt-1 accent-orange-500"
-                              checked={checked}
-                              onChange={(event) => {
-                                const isChecked = event.target.checked
-                                setDraft((prev) => {
-                                  const nextIds = isChecked
-                                    ? Array.from(new Set([...prev.collegeIds, college.id]))
-                                    : prev.collegeIds.filter((id) => id !== college.id)
-                                  return { ...prev, collegeIds: nextIds }
-                                })
-                              }}
-                              disabled={saving}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
-                              {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <input
+                                type="checkbox"
+                                className="mt-1 accent-orange-500"
+                                checked={checked}
+                                onChange={(event) => {
+                                  const isChecked = event.target.checked
+                                  setDraft((prev) => {
+                                    const nextIds = isChecked
+                                      ? Array.from(new Set([...prev.collegeIds, college.id]))
+                                      : prev.collegeIds.filter((id) => id !== college.id)
+                                    return { ...prev, collegeIds: nextIds }
+                                  })
+                                }}
+                                disabled={saving}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-white truncate">{college.name || "Untitled college"}</p>
+                                {subheading && <p className="text-xs text-white/60 truncate">{subheading}</p>}
+                              </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="grid w-full grid-cols-1 gap-2 lg:w-auto lg:grid-cols-2">
                               <Input
                                 type="number"
                                 min="0"
@@ -2604,7 +2606,7 @@ function ListingsPanel({
                                   }))
                                 }}
                                 placeholder="Faculty"
-                                className="h-8 w-24 bg-white/10 text-white placeholder:text-white/40"
+                                className="h-8 w-full bg-white/10 text-white placeholder:text-white/40 lg:w-24"
                                 disabled={!checked || saving}
                               />
                               <Input
@@ -2628,11 +2630,11 @@ function ListingsPanel({
                                   }))
                                 }}
                                 placeholder="Enrolled"
-                                className="h-8 w-24 bg-white/10 text-white placeholder:text-white/40"
+                                className="h-8 w-full bg-white/10 text-white placeholder:text-white/40 lg:w-24"
                                 disabled={!checked || saving}
                               />
                             </div>
-                            <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70">
+                            <span className="text-[10px] rounded-full bg-white/10 px-2 py-1 text-white/70 lg:ml-auto">
                               {college.status}
                             </span>
                           </div>
@@ -2671,7 +2673,7 @@ function ListingsPanel({
                   {newCollegeEntries.map((entry, index) => (
                     <div
                       key={`new-college-${index}`}
-                      className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-start"
+                      className="grid gap-2 grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-start"
                     >
                       <Input
                         value={entry.name}
