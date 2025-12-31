@@ -44,6 +44,7 @@ type ListingItem = {
   status: "Draft" | "Published"
   description: string
   updatedAt: string | Timestamp
+  whatsNew?: string
   rating?: number | null
   jobsCount?: number | null
   reviewsCount?: number | null
