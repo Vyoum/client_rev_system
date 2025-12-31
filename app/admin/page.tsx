@@ -1073,6 +1073,7 @@ function ListingsPanel({
   const isFeedForm = collectionName === "feed"
   const isCollegesCollection = collectionName === "colleges"
   const isSchoolCollection = collectionName === "school"
+  const isSchoolOrKinder = collectionName === "school" || collectionName === "kindergarden"
   const [collegeOptions, setCollegeOptions] = useState<Array<{ id: string; name: string; city: string; state: string; status: ListingStatus }>>([])
   const [collegeOptionsLoading, setCollegeOptionsLoading] = useState(false)
   const [collegeSearch, setCollegeSearch] = useState("")
@@ -2177,7 +2178,9 @@ function ListingsPanel({
                     {section === "whatsnew"
                       ? "What's New"
                       : section === "others"
-                        ? "Courses"
+                        ? isSchoolOrKinder
+                          ? "Others"
+                          : "Courses"
                         : section.charAt(0).toUpperCase() + section.slice(1)}
                   </button>
                 ))}
@@ -2608,7 +2611,7 @@ function ListingsPanel({
               {/* Courses Section */}
               {activeFormSection === "others" && (
                 <div className="space-y-3 w-full">
-                  <label className="block text-xs text-white/60 mb-2">Courses</label>
+                  <label className="block text-xs text-white/60 mb-2">{isSchoolOrKinder ? "Others" : "Courses"}</label>
                   <Textarea
                     value={draft.others}
                     onChange={(event) => setDraft((prev) => ({ ...prev, others: event.target.value }))}
