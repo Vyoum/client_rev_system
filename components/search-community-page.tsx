@@ -865,6 +865,12 @@ export default function SearchCommunityPage() {
         selectedListing.courseField ? `Course field: ${selectedListing.courseField}` : null,
       ].filter((line): line is string => Boolean(line))
     : []
+  const otherDetails = selectedListing?.others
+    ? selectedListing.others
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : []
 
   return (
     <div className="min-h-screen bg-white text-[#111827] flex flex-col scroll-smooth">
@@ -1330,17 +1336,29 @@ export default function SearchCommunityPage() {
             <div className="mt-5 space-y-4">
               <div className="rounded-xl border border-[#E5E7EB] bg-white p-6">
                 <h3 className="text-lg font-semibold text-[#111827] mb-4">Course details</h3>
-                {courseDetails.length > 0 ? (
+                {courseDetails.length > 0 && (
                   <div className="space-y-2 text-sm text-[#4B5563]">
                     {courseDetails.map((line) => (
                       <p key={line}>{line}</p>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-sm text-[#6B7280]">No course details available yet.</p>
                 )}
-                {selectedListing.others && (
-                  <p className="mt-4 text-sm text-[#4B5563]">{selectedListing.others}</p>
+                {otherDetails.length > 0 && (
+                  <div className={`mt-3 space-y-2 ${activeTab === "Colleges" ? "" : "text-sm text-[#4B5563]"}`}>
+                    {otherDetails.map((line) => (
+                      <p
+                        key={line}
+                        className={
+                          activeTab === "Colleges" ? "text-base font-semibold text-[#111827]" : "text-sm text-[#4B5563]"
+                        }
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {courseDetails.length === 0 && otherDetails.length === 0 && (
+                  <p className="text-sm text-[#6B7280]">No course details available yet.</p>
                 )}
               </div>
             </div>
