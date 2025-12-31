@@ -871,16 +871,19 @@ export default function AdminPage() {
               Review users, publish listings, and keep community feedback organized.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button className="h-9 bg-white/10 text-white hover:bg-white/20">Export snapshot</Button>
-            <Button className="h-9 bg-orange-500 text-white hover:bg-orange-600">New announcement</Button>
-          </div>
+          <div className="flex items-center gap-2" />
         </header>
 
         <section className={`mt-6 grid gap-4 ${canManageReviews ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
           <SummaryCard title="Users" value={usersLoading ? "Loading..." : `${users.length}`} detail="Signed up" />
           <SummaryCard title="Listings" value={`${publishedListings}/${listingsTotal}`} detail="Published" />
-          {canManageReviews && <SummaryCard title="Reviews" value={`${hiddenReviews}`} detail="Hidden" />}
+          {canManageReviews && (
+            <SummaryCard
+              title="Reviews"
+              value={reviewsLoading ? "Loading..." : `${reviews.length}`}
+              detail={reviewsLoading ? "Syncing" : `Hidden ${hiddenReviews}`}
+            />
+          )}
         </section>
 
         <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-2">

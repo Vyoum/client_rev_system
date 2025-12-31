@@ -1732,6 +1732,39 @@ export default function SearchCommunityPage() {
               <div className="rounded-2xl border border-[#E5E7EB] bg-white">
                 <ul className="divide-y divide-[#E5E7EB]">
                   {filteredListings.map((listing) => {
+                    if (activeTab === "Feeds") {
+                      return (
+                        <li key={listing.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenListing(listing)}
+                            className="w-full px-5 py-4 text-left transition-colors hover:bg-[#F9FAFB]"
+                          >
+                            <div className="w-full">
+                              {listing.logoUrl ? (
+                                <img
+                                  src={listing.logoUrl}
+                                  alt={listing.name}
+                                  className="h-44 w-full rounded-2xl border border-[#E5E7EB] object-cover sm:h-52"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="flex h-44 w-full items-center justify-center rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#6B7280] sm:h-52">
+                                  No image available
+                                </div>
+                              )}
+                              <div className="mt-3">
+                                <h3 className="text-base font-semibold text-[#111827]">{listing.name}</h3>
+                                {listing.description && (
+                                  <p className="mt-1 text-sm text-[#6B7280]">{listing.description}</p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      )
+                    }
+
                     // Get calculated rating from user reviews (preferred over admin rating)
                     const calculatedRating = calculatedRatings[listing.id]
                     const displayRating = calculatedRating?.average ?? null
