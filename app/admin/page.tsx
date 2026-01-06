@@ -323,13 +323,14 @@ export default function AdminPage() {
         if (!isMounted) return
 
         // Get all listing IDs from reviews
-        const listingIds = new Set<string>()
-        snapshot.docs.forEach((doc) => {
-          const data = doc.data()
-          if (data.listingId) {
-            listingIds.add(data.listingId)
-          }
-        })
+        // Get all listing IDs from reviews
+const listingIds = new Set<string>()
+snapshot.docs.forEach((doc) => {
+  const data = doc.data() as Record<string, unknown>
+  if (data.listingId && typeof data.listingId === 'string') {
+    listingIds.add(data.listingId)
+  }
+})
 
         // Fetch listing names from all collections
         const listingNames: Record<string, string> = {}
