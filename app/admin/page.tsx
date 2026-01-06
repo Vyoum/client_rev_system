@@ -352,21 +352,21 @@ snapshot.docs.forEach((doc) => {
           }
         }
 
-        const nextReviews = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          const listingId = data.listingId || ""
-          const listingName = listingNames[listingId] || listingId || "Unknown Listing"
+       const nextReviews = snapshot.docs.map((doc) => {
+  const data = doc.data() as Record<string, unknown>
+  const listingId = (typeof data.listingId === 'string' ? data.listingId : "") || ""
+  const listingName = listingNames[listingId] || listingId || "Unknown Listing"
 
-          return {
-            id: doc.id,
-            author: data.authorName || data.author || "Anonymous",
-            rating: typeof data.rating === "number" ? data.rating : 0,
-            message: data.message || "",
-            source: listingId ? listingName : "User Review",
-            status: (data.status || "Visible") as ReviewStatus,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : formatTimestamp(data.createdAt),
-          }
-        })
+  return {
+    id: doc.id,
+    author: (typeof data.authorName === 'string' ? data.authorName : typeof data.author === 'string' ? data.author : null) || "Anonymous",
+    rating: typeof data.rating === "number" ? data.rating : 0,
+    message: typeof data.message === 'string' ? data.message : "",
+    source: listingId ? listingName : "User Review",
+    status: (typeof data.status === 'string' ? data.status : "Visible") as ReviewStatus,
+    createdAt: data.createdAt && typeof data.createdAt === 'object' && 'toDate' in data.createdAt ? (data.createdAt as any).toDate().toLocaleString() : formatTimestamp(data.createdAt),
+  }
+})
         setReviews(nextReviews)
         setReviewsLoading(false)
       } catch (error: any) {
